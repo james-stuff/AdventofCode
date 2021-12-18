@@ -2,6 +2,419 @@ from main import Puzzle, Point
 import main
 
 
+class TestDaySixteen:
+    part_one_examples = {
+        "8A004A801A8002F478": 16,
+        "620080001611562C8802118E34": 12,
+        "C0015000016115A2E0802F182340": 23,
+        "A0016C880162017C3686B18A3D4780": 31
+    }
+    literal_example = "D2FE28"
+
+    def test_init(self):
+        text = Puzzle(16).get_text_input().strip()
+        # print(f'\nLength of text is {len(text)}')
+        lines = text.count("\n")
+        assert not lines
+        # print(f'Text contains {lines} line breaks')
+        # print(text)
+
+    def test_hexadecimal_conversion(self):
+        text = Puzzle(16).get_text_input().strip()
+        print(bin(0x0F))
+        print(main.day_16_hex_string_to_binary("17"))
+        assert len(main.day_16_hex_string_to_binary(text)) == 4 * len(text)
+
+    def test_version_number_and_type(self):
+        assert main.day_16_get_version_no_from_binary_string('110100101111111000101000') == 6
+        assert main.day_16_packet_is_operator("00111000000000000110111101000101001010010001001000000000")
+        assert not main.day_16_packet_is_operator("110100101111111000101000")
+
+    def test_packet_length_determination(self):
+        literal_packet = main.Day16Packet(self.literal_example)
+        assert literal_packet.get_length_in_hex_chars() == 6
+        operator_packet = main.Day16Packet([*self.part_one_examples.keys()][0])
+        # print(operator_packet.get_length_in_hex_chars())
+        sub_packets_hex = "38006F45291200"
+        operator_with_sub_packets = main.Day16Packet(sub_packets_hex)
+        assert operator_with_sub_packets.get_length_in_hex_chars() == len(sub_packets_hex)
+        packet_count_operator_hex = "EE00D40C823060"
+        operator_with_packet_count = main.Day16Packet(packet_count_operator_hex)
+        assert operator_with_packet_count.get_length_in_hex_chars() == len(packet_count_operator_hex)
+
+    def test_read_packet_returns_bit_length_read(self):
+        literal_packet = main.Day16Packet(self.literal_example)
+        assert literal_packet.read_packet() == 21
+
+    def test_version_sum(self):
+        literal_packet = main.Day16Packet(self.literal_example)
+        literal_packet.read_packet()
+        assert literal_packet.get_version_sum() == 6
+        packet_with_counted_sub_packets_hex = "EE00D40C823060"
+        new_packet = main.Day16Packet(packet_with_counted_sub_packets_hex)
+        new_packet.read_packet()
+        assert new_packet.get_version_sum() == 7 + 2 + 4 + 1
+        bit_length_packet_hex = "38006F45291200"
+        bl_packet = main.Day16Packet(bit_length_packet_hex)
+        bl_packet.read_packet()
+        assert bl_packet.get_version_sum() == 1 + 6 + 2
+        for raw_hex, expected_result in self.part_one_examples.items():
+            pkt = main.Day16Packet(raw_hex)
+            pkt.read_packet()
+            print(f'{raw_hex}:')
+            assert pkt.get_version_sum() == expected_result
+
+    def test_part_one(self):
+        hex_input = Puzzle(16).get_text_input()
+        p1_packet = main.Day16Packet(hex_input)
+        bits_read = p1_packet.read_packet()
+        solution = p1_packet.get_version_sum()
+        print(f'Part One solution is {solution}.  ({bits_read} bits read)')
+        assert solution == 969
+
+
+
+class TestDayFifteen:
+    example_input = """1163751742
+1381373672
+2136511328
+3694931569
+7463417111
+1319128137
+1359912421
+3125421639
+1293138521
+2311944581"""
+
+    def test_path_creation(self):
+        example_grid = main.day_9_load_data(self.example_input)
+        assert main.day_15_calc_path_total([[1, 3], [2, 1]], (True, False)) == (main.Point(1, 1), 4)
+        assert main.day_15_calc_path_total([[1, 3], [2, 1]], (False,)) == (main.Point(0, 1), 2)
+        assert main.day_15_cut_square(example_grid, main.Point(1, 1), 4) == \
+               [[3, 8, 1, 3], [1, 3, 6, 5], [6, 9, 4, 9], [4, 6, 3, 4]]
+        assert main.day_15_cut_square(example_grid, main.Point(8, 6), 4) == [[2, 1], [3, 9]]
+        assert main.day_15_cut_square(example_grid, main.Point(9, 1), 4) == [[2]]
+        assert main.day_15_cut_square(example_grid, main.Point(0, 7), 4) == [[3, 1, 2], [1, 2, 9], [2, 3, 1]]
+        assert main.day_15_get_min_path_total_across_square([[1, 3], [2, 1]]) == (main.Point(0, 1), 2)
+        sq = main.day_15_cut_square(example_grid, main.Point(0, 1), 3)
+        print('3x3 square test:')
+        assert main.day_15_get_min_path_total_across_square(sq) == (main.Point(0, 2), 5)
+        print('last test')
+        assert main.day_15_calc_path_total([[1, 3], [2, 1]], (True, True, True)) == \
+               (main.Point(1, 0), 3)
+
+    def test_part_one(self):
+        example_grid = main.day_9_load_data(self.example_input)
+        main.day_15_part_one(example_grid)
+
+
+
+class TestDayFourteen:
+    example_input = """NNCB
+
+CH -> B
+HH -> N
+CB -> H
+NH -> C
+HB -> C
+HC -> B
+HN -> C
+NN -> C
+BH -> H
+NC -> B
+NB -> B
+BN -> B
+BB -> N
+BC -> B
+CC -> N
+CN -> C"""
+
+    def test_init(self):
+        lines = Puzzle.convert_input(self.example_input, None, True)
+        template, insertions = main.day_14_load_data(lines)
+        assert template == "NNCB"
+        assert len(insertions) == 16
+        assert insertions['BB'] == "N"
+        assert insertions['CH'] == "B"
+
+    def test_run_process(self):
+        data = Puzzle.convert_input(self.example_input, None, True)
+        original_polymer, insertions = main.day_14_load_data(data)
+        assert main.day_14_run_insertion_process(original_polymer, insertions) == "NCNBCHB"
+        assert len(main.day_14_iterate_insertion_process(original_polymer, insertions, 4)) == 49
+        assert len(main.day_14_iterate_insertion_process(original_polymer, insertions, 10)) == 3073
+
+    def test_part_one(self):
+        data = Puzzle.convert_input(self.example_input, None, True)
+        assert main.day_14_part_one(data) == 1588
+        puzzle_data = Puzzle.convert_input(Puzzle(14).get_text_input())
+        solution = main.day_14_part_one(puzzle_data)
+        print(f'Part One solution: {solution}')
+        assert solution == 2587
+
+    def test_work_on_part_two(self):
+        data = Puzzle.convert_input(self.example_input, None, True)
+        start_polymer, insertions = main.day_14_load_data(data)
+
+        def generate_pair_insertions(given_insertions: dict) -> dict:
+            return {k: (k[0] + v, v + k[1]) for k, v in given_insertions.items()}
+
+        assert main.day_14_create_initial_pair_dict(start_polymer) == {"NN": 1, "NC": 1, "CB": 1}
+        replacement_dict = generate_pair_insertions(insertions)
+        assert len(replacement_dict) == len(insertions)
+        print(replacement_dict)
+        for val in replacement_dict.values():
+            one, two = val
+            assert one in replacement_dict and two in replacement_dict
+
+        first_run = main.day_14_growth_step({"NN": 1, "NC": 1, "CB": 1}, replacement_dict)
+        assert sum([*first_run.values()]) == 6
+        assert first_run["CN"] == 1
+        assert first_run["HB"] == 1
+        assert first_run["NN"] == 0
+        second_run = main.day_14_growth_step(first_run, replacement_dict)
+        assert sum([*second_run.values()]) == 12
+        assert second_run["BB"] == 2
+        assert second_run["BC"] == 2
+        assert second_run["BH"] == 1
+        assert second_run["HB"] == 0
+
+        ten_iteration_run = main.day_14_create_initial_pair_dict(start_polymer)
+        for it in range(10):
+            ten_iteration_run = main.day_14_growth_step(ten_iteration_run, replacement_dict)
+        assert sum([*ten_iteration_run.values()]) == 3073 - 1
+        ltr_count = main.day_14_count_letters(ten_iteration_run, start_polymer[-1])
+        assert ltr_count['B'] == 1749
+        assert ltr_count['C'] == 298
+        assert ltr_count['H'] == 161
+        assert ltr_count['N'] == 865
+        assert len(ltr_count) == 4
+
+    def test_part_two(self):
+        data = Puzzle.convert_input(self.example_input, None, True)
+        length = 4
+        for _ in range(40):
+            length = (length * 2) -1
+        print(f'Expected final length: {length}')
+        assert main.day_14_part_two(data) == 2188189693529
+        big_data = Puzzle.convert_input(Puzzle(14).get_text_input(), None, True)
+        solution = main.day_14_part_two(big_data)
+        print(f'Part Two solution is {solution}')
+        assert solution == 3318837563123
+
+
+class TestDayThirteen:
+    example_input = """6,10
+0,14
+9,10
+0,3
+10,4
+4,11
+6,0
+6,12
+4,1
+0,13
+10,12
+3,4
+3,0
+8,4
+1,10
+2,14
+8,10
+9,0
+
+fold along y=7
+fold along x=5"""
+
+    def test_init(self):
+        lines = Puzzle.convert_input(self.example_input, None, True)
+        points, folds = main.day_13_load_data(lines)
+        assert len(points) == 18
+        assert len(folds) == 2
+        main.day_13_print_page(points)
+
+    def test_folding(self):
+        rows = Puzzle.convert_input(self.example_input, None, True)
+        dots, foldings = main.day_13_load_data(rows)
+        folded = main.day_13_fold_up(dots, 7)
+        main.day_13_print_page(folded)
+        assert len(folded) == 17
+        re_folded = main.day_13_fold_to_left(folded, 5)
+        main.day_13_print_page(re_folded)
+        assert len(re_folded) == 16
+
+    def test_part_one(self):
+        rows = Puzzle.convert_input(self.example_input, None, True)
+        assert main.day_13_part_one(rows) == 0
+        actual_input = Puzzle.convert_input(Puzzle(13).get_text_input(), None, True)
+        solution = main.day_13_part_one(actual_input)
+        print(f'Part One solution is {solution}')
+        assert solution == 655
+
+    def test_part_two(self):
+        rows = Puzzle.convert_input(self.example_input, None, True)
+        main.day_13_part_two(rows)
+        actual_input = Puzzle.convert_input(Puzzle(13).get_text_input(), None, True)
+        main.day_13_part_two(actual_input)
+
+
+class TestDayTwelve:
+    short_example = """start-A
+start-b
+A-c
+A-b
+b-d
+A-end
+b-end"""
+
+    slightly_larger_example = """dc-end
+HN-start
+start-kj
+dc-start
+dc-HN
+LN-dc
+HN-end
+kj-sa
+kj-HN
+kj-dc"""
+
+    even_larger_example = """fs-end
+he-DX
+fs-he
+start-DX
+pj-DX
+end-zg
+zg-sl
+zg-pj
+pj-he
+RW-he
+fs-DX
+pj-RW
+zg-RW
+start-pj
+he-WI
+zg-he
+pj-fs
+start-RW"""
+
+    def test_init(self):
+        raw_paths = Puzzle.convert_input(self.short_example, None)
+        connections = main.day_12_load_all_connections(raw_paths)
+        assert main.day_12_list_connected_nodes("start", connections) == ["A", "b"]
+        assert main.day_12_list_connected_nodes("c", connections) == ["A"]
+        assert main.day_12_list_connected_nodes("b", connections) == ["start", "A", "d", "end"]
+
+    def test_all_valid_paths(self):
+        raw = Puzzle.convert_input(self.short_example, None)
+        assert main.day_12_part_one(raw) == 10
+        larger = Puzzle.convert_input(self.slightly_larger_example, None)
+        assert main.day_12_part_one(larger) == 19
+        even_larger = Puzzle.convert_input(self.even_larger_example, None)
+        assert main.day_12_part_one(even_larger) == 226
+
+    def test_part_one(self):
+        raw_inputs = Puzzle(12).input_as_list(None)
+        solution = main.day_12_part_one(raw_inputs)
+        print(f'Solution to Part One is {solution}')
+        assert solution == 3738
+
+    def test_more_complicated_rules(self):
+        path_so_far = ['A', 'b', 'C', 'd', 'b']
+        visited_small_caves = set(filter(lambda n: n.islower(), path_so_far))
+        print(any([path_so_far.count(cave) > 1 for cave in visited_small_caves]))
+
+        raw = Puzzle.convert_input(self.even_larger_example, None)
+        assert main.day_12_part_two(raw) == 3509
+
+    def test_part_two(self):
+        raw_inputs = Puzzle(12).input_as_list(None)
+        solution = main.day_12_part_two(raw_inputs)
+        print(f'Part Two solution: {solution}')
+        assert solution == 120506
+
+
+class TestDayEleven:
+    short_example = """11111
+19991
+19191
+19991
+11111"""
+    example_input = """5483143223
+2745854711
+5264556173
+6141336146
+6357385478
+4167524645
+2176841721
+6882881134
+4846848554
+5283751526"""
+
+    def test_init(self):
+        numbers = main.day_9_load_data(self.short_example)
+        assert len(numbers), len(numbers[2]) == (5, 5)
+        # print(numbers)
+        # main.day_11_print_grid(numbers)
+
+    def test_increment(self):
+        array = [[0, 1], [8, 9]]
+        assert main.day_11_global_energy_increment(array) == [[1, 2], [9, 10]]
+
+    def test_neighbours(self):
+        points = main.day_11_get_all_neighbours((0, 0), 9, 99)
+        assert len(points) == 3
+        central_points = main.day_11_get_all_neighbours((2, 2), 5, 5)
+        assert len(central_points) == 8
+        assert (2, 2) not in central_points
+        bottom_corner_points = main.day_11_get_all_neighbours((4, 4), 5, 5)
+        assert len(bottom_corner_points) == 3
+        assert (4, 4) not in bottom_corner_points
+        edge_points = main.day_11_get_all_neighbours((4, 3), 5, 5)
+        assert len(edge_points) == 5
+        assert (4, 3) not in edge_points
+
+    def test_process(self):
+        school = main.day_9_load_data(self.short_example)
+        expected_after_step_one = main.day_9_load_data("""34543
+40004
+50005
+40004
+34543""")
+        step_one = main.day_11_reset_flashers(main.day_11_flash_step(school))
+        print('\nStep one, got:')
+        main.day_11_print_grid(step_one)
+        print('Expected:')
+        main.day_11_print_grid(expected_after_step_one)
+        assert step_one == expected_after_step_one
+        assert main.day_11_flash_count == 9
+        step_two = main.day_11_reset_flashers(main.day_11_flash_step(step_one))
+        expected_after_step_two = main.day_9_load_data("""45654
+51115
+61116
+51115
+45654""")
+        assert step_two == expected_after_step_two
+        main.day_11_flash_count = 0
+        fc = main.day_11_part_one(school, 2)
+        assert fc == 9
+
+    def test_part_one(self):
+        starting_grid = main.day_9_load_data(self.example_input)
+        assert main.day_11_part_one(starting_grid, 100) == 1656
+        puzzle_grid = main.day_9_load_data(Puzzle(11).get_text_input())
+        solution = main.day_11_part_one(puzzle_grid, 100)
+        print(f'Solution to Part One is {solution}')
+
+    def test_part_two(self):
+        starting_grid = main.day_9_load_data(self.example_input)
+        main.day_11_part_one(starting_grid, 200)
+        main.day_11_it_happened = False
+        puzzle_grid = main.day_9_load_data(Puzzle(11).get_text_input())
+        main.day_11_part_one(puzzle_grid, 1000000)
+
+
+
+
 class TestDayTen:
     example_input = """[({(<(())[]>[[{[]{<()<>>
 [(()[<>])]({[<{<<[]>>(

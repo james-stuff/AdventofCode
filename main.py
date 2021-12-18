@@ -1,4 +1,6 @@
 from collections import namedtuple
+from itertools import product, combinations
+import random
 
 
 class Puzzle:
@@ -29,6 +31,8 @@ class Puzzle:
 
 
 def binary_to_int(binary: []) -> int:
+    if isinstance(binary, str):
+        binary = [int(b) for b in binary]
     return sum([bool(b) * 2 ** i for i, b in enumerate(binary[::-1])])
 
 
@@ -38,6 +42,447 @@ def invert_binary(binary: []) -> [bool]:
 
 # TODO: look at Barry's code
 # dataclasses
+
+# TODO for Day 16:
+#   string to work with is the whole remaining hex string?
+#   convert it to binary
+#   determine the length of the next packet (including sub-packets!)
+#   for next iteration, slice the main hex string after the current packet
+#
+
+class Day16Packet:
+    # TODO: extra trailing zeroes only appear after the very outer packet
+    def __init__(self, data_string: str, convert_to_binary=True):
+        self.binary = day_16_hex_string_to_binary(data_string.strip()) \
+            if convert_to_binary else data_string
+        self.version_sum = 0
+
+    def read_packet(self):
+        self.version_sum += binary_to_int(self.binary[:3])
+        if day_16_packet_is_operator(self.binary):
+            length_is_number_of_sub_packets = int(self.binary[6])
+            if length_is_number_of_sub_packets:
+                sub_packets = binary_to_int(self.binary[7:18])
+                index = 18
+                for _ in range(sub_packets):
+                    index = self.read_next_sub_packet(index)
+            else:
+                bit_length = binary_to_int(self.binary[7:22])
+                index = 22
+                while index < 22 + bit_length:
+                    index = self.read_next_sub_packet(index)
+            return index
+        return day_16_get_literal_binary_length(self.binary, True)
+
+    def read_next_sub_packet(self, index: int) -> int:
+        next_packet = Day16Packet(self.binary[index:], False)
+        index += next_packet.read_packet()
+        self.version_sum += next_packet.get_version_sum()
+        return index
+
+    def get_version_sum(self):
+        return self.version_sum
+
+    def get_length_in_hex_chars(self) -> int:
+        if day_16_packet_is_operator(self.binary):
+            length_type_id = int(self.binary[6])
+            if length_type_id:
+                sub_packets = binary_to_int(self.binary[7:18])
+                index = 18
+                for _ in range(sub_packets):
+                    new_packet = Day16Packet(self.binary[index:], False)
+                    index += new_packet.get_length_in_binary_chars()
+            else:
+                bit_length = binary_to_int(self.binary[7:22])
+                index = 22 + bit_length
+            while index < len(self.binary) and not int(self.binary[index]):
+                index += 1
+            if index % 4 == 0:
+                return index // 4
+            print('Oops, non-standard termination of binary string')
+            assert index % 4 == 0
+        else:
+            return day_16_get_literal_binary_length(self.binary)
+
+    def get_length_in_binary_chars(self) -> int:
+        """deprecated - ONLY USED IN get_length_in_hex_chars"""
+        if day_16_packet_is_operator(self.binary):
+            return 0
+        return day_16_get_literal_binary_length(self.binary, True)
+
+
+def day_16_get_literal_binary_length(binary: str, is_sub_packet: bool = False) -> int:
+    stop = False
+    index = 6
+    while not stop:
+        next_number = binary[index:index + 5]
+        stop = not int(next_number[0])
+        index += 5
+
+    if is_sub_packet:
+        return index
+
+    while index < len(binary) and not int(binary[index]):
+        index += 1
+    if index % 4 == 0:
+        return index // 4
+    print('Oops, non-standard termination of binary string')
+    assert index % 4 == 0
+
+
+def day_16_hex_string_to_binary(hexadecimals: str) -> str:
+    def convert(hex_char: str) -> str:
+        binary_value = eval(f'bin(0x{hex_char})[2:]')
+        return binary_value.rjust(4, "0")
+
+    return ''.join([convert(ch) for ch in hexadecimals])
+
+
+def day_16_get_version_no_from_binary_string(binary: str) -> int:
+    return binary_to_int(binary[:3])
+
+
+def day_16_packet_is_operator(packet: str) -> bool:
+    return binary_to_int(packet[3:6]) != 4
+
+
+def day_15_part_one(whole_grid: [[int]]):
+    x, y, total = 0, 0, 0
+    edge_length = len(whole_grid)
+    while x < edge_length and y < edge_length:
+        print(f'Next square origin: ({x}, {y})')
+        next_square = day_15_cut_square(whole_grid, Point(x, y), 5)
+        end_point, section_total = day_15_get_min_path_total_across_square(next_square)
+        total += section_total
+        print(f'--> Section total: {section_total}')
+        x_incr, y_incr = end_point
+        x, y = x + x_incr, y + y_incr
+        if x == edge_length - 1 or y == edge_length - 1:
+            print('Edge is reached')
+            break
+
+
+def day_15_get_min_path_total_across_square(square: [[int]]) -> ((int), int):
+    all_paths = day_15_get_all_paths_across_sub_square(square)
+    min_total = min([*all_paths.values()])
+    best_paths = [k for k, v in all_paths.items() if v == min_total]
+    if len(best_paths) > 1:
+        print(f'There is more than one optimal path')
+        return best_paths[random.randrange(len(best_paths))]
+    return [k for k, v in all_paths.items() if v == min_total][0], min_total
+
+
+def day_15_get_all_paths_across_sub_square(sub_square: [[int]]) -> {}:
+    possible_paths = day_15_binary_combinations((len(sub_square) - 1) * 2)
+    paths_dict = {}
+    for path in possible_paths:
+        end, path_total = day_15_calc_path_total(sub_square, path)
+        paths_dict[end] = path_total
+    return paths_dict
+
+
+def day_15_binary_combinations(length: int = 4) -> [bool]:
+    return product(range(2), repeat=length)
+
+
+def day_15_cut_square(whole_grid: [[int]], origin: (int, int), size: int) -> [[int]]:
+    whole_grid_size = len(whole_grid)
+    ox, oy = origin.x, origin.y
+    if ox + size > whole_grid_size:
+        size = whole_grid_size - ox
+    if oy + size > whole_grid_size:
+        size = whole_grid_size - oy
+    return [[whole_grid[y][x] for x in range(ox, ox + size)]
+            for y in range(oy, oy + size)]
+
+
+def day_15_calc_path_total(square: [[int]], path_steps: (bool)) -> ((int), int):
+    """True -> across, False -> down"""
+    x, y, total = 0, 0, 0
+    width = len(square)
+    end_point = Point(0, 0)
+    # print('\nNew Path: ', end='')
+    for go_across in path_steps:
+        if go_across:
+            x += 1
+        else:
+            y += 1
+        if any([dim >= width for dim in (x, y)]):
+            break
+        total += square[y][x]
+        end_point = Point(x, y)
+        # print(square[y][x], end='')
+    return end_point, total
+
+
+def day_14_part_one(raw_input: [str]) -> int:
+    polymer, insertions = day_14_load_data(raw_input)
+    new_polymer = day_14_iterate_insertion_process(polymer, insertions, 10)
+    return day_14_do_final_calculation(new_polymer)
+
+
+def day_14_part_two(raw_input: [str]) -> int:
+    polymer, insertions = day_14_load_data(raw_input)
+    last_element = polymer[-1]
+    pairs = day_14_create_initial_pair_dict(polymer)
+    pair_replacements = {k: (k[0] + v, v + k[1]) for k, v in insertions.items()}
+    for _ in range(40):
+        pairs = day_14_growth_step(pairs, pair_replacements)
+    print(f'After 40 steps, length of polymer is {sum([*pairs.values()])}')
+    letter_counts = day_14_count_letters(pairs, last_element)
+    most_common, rarest = (func([v for v in letter_counts.values() if v > 0])
+                           for func in (max, min))
+    return most_common - rarest
+
+
+def day_14_count_letters(pair_dict: dict, last_letter: str) -> dict:
+    letter_counts = {}
+    uppercase = [chr(i) for i in range(65, 91)]
+    for letter in uppercase:
+        pairs_recorded = [k for k in pair_dict.keys() if k[0] == letter]
+        if pairs_recorded:
+            letter_counts[letter] = sum([pair_dict[pair] for pair in pairs_recorded])
+            if letter == last_letter:
+                letter_counts[letter] += 1
+            print(f'Pairs recorded for {letter}: {letter_counts[letter]}')
+    return letter_counts
+
+
+def day_14_growth_step(pair_dict: dict, replacements: dict) -> dict:
+    next_dict = {p: 0 for p in replacements.keys()}
+    for pair, occurrences in pair_dict.items():
+        new_pair_1, new_pair_2 = replacements[pair]
+        next_dict[new_pair_1] += occurrences
+        next_dict[new_pair_2] += occurrences
+    return next_dict
+
+
+def day_14_create_initial_pair_dict(polymer: str):
+    '''In the initial string, how many of each pair?'''
+    first_dict = {}
+    for ind, elem in enumerate(polymer[:-1]):
+        pair = polymer[ind:ind + 2]
+        if pair in first_dict:
+            first_dict[pair] += 1
+        else:
+            first_dict[pair] = 1
+    return first_dict
+
+
+def day_14_do_final_calculation(long_polymer: str) -> int:
+    uppercase = [chr(i) for i in range(65, 91)]
+    elem_counts = {letter: long_polymer.count(letter) for letter in uppercase}
+    most_common, rarest = (func([v for v in elem_counts.values() if v > 0])
+                           for func in (max, min))
+    return most_common - rarest
+
+
+def day_14_load_data(raw_input: [str]) -> (str, dict):
+    return raw_input[0], {ln[:2]: ln[-1] for ln in raw_input if "->" in ln}
+
+
+def day_14_iterate_insertion_process(polymer: str, insertions: dict, iterations: int) -> str:
+    for _ in range(iterations):
+        polymer = day_14_run_insertion_process(polymer, insertions)
+    return polymer
+
+
+def day_14_run_insertion_process(polymer: str, insertions: dict) -> str:
+    product_polymer = ""
+    for ind, elem in enumerate(polymer[:-1]):
+        product_polymer += elem + insertions[polymer[ind:ind + 2]]
+    product_polymer += polymer[-1]
+    return product_polymer
+
+
+def day_13_part_one(raw_input: [str]) -> int:
+    points, folds = day_13_load_data(raw_input)
+    first_fold_axis, fold_co_ord = folds[0]
+    if first_fold_axis == 'x':
+        folded_page = day_13_fold_to_left(points, fold_co_ord)
+        return len(folded_page)
+    print(f'Failed to process instructions: unexpected fold axis came first?')
+    return 0
+
+
+def day_13_part_two(raw_input: [str]):
+    dots, folds = day_13_load_data(raw_input)
+    for fold in folds:
+        # print(f'Folding: {fold[0]}, {fold[1]}')
+        axis, co_ord = fold
+        dots = day_13_fold_up(dots, co_ord) if axis == "y" else day_13_fold_to_left(dots, co_ord)
+    day_13_print_page(dots)
+
+
+def day_13_load_data(raw_lines: [str]) -> ({tuple}, [tuple]):
+    points = {eval(f"Point({ln})") for ln in raw_lines if "," in ln}
+    folds = []
+    for line in raw_lines:
+        if "=" in line:
+            axis_label, _, co_ordinate = line.partition("=")
+            folds.append((axis_label[-1], int(co_ordinate)))
+    return points, folds
+
+
+def day_13_print_page(dots: {(int, int)}):
+    """NB. Calculates page size on the basis of most extreme dot positions,
+    not necessarily edge of page"""
+    x_max, y_max = max([d.x for d in dots]), max([d.y for d in dots])
+    print(f'Page size: {x_max + 1} x {y_max + 1}')
+    for y in range(y_max + 1):
+        print(''.join(["#" if Point(x, y) in dots else "." for x in range(x_max + 1)]))
+
+
+def day_13_fold_up(dots: [(int, int)], axis_value: int) -> {(int, int)}:
+    new_dots = [d if d.y < axis_value else Point(d.x, (axis_value * 2) - d.y)
+                for d in dots]
+    return set(new_dots)
+
+
+def day_13_fold_to_left(dots: [(int, int)], axis_value: int) -> {(int, int)}:
+    new_dots = [d if d.x < axis_value else Point((axis_value * 2) - d.x, d.y)
+                for d in dots]
+    return set(new_dots)
+
+
+def day_12_part_one(raw_input: [str]) -> int:
+    all_connections = day_12_load_all_connections(raw_input)
+    return len(day_12_generate_paths(["start"], all_connections))
+
+
+def day_12_part_two(raw_input: [str]) -> int:
+    connections = day_12_load_all_connections(raw_input)
+    return len(day_12_part_two_generate_paths(["start"], connections))
+
+
+def day_12_generate_paths(path_so_far: [str], connections: [(str, str)]) -> [[str]]:
+    next_nodes = day_12_list_connected_nodes(path_so_far[-1], connections)
+    extended_paths = []
+    for node in next_nodes:
+        if node == "end":
+            extended_paths.append(path_so_far + ["end"])
+        elif node.isupper() or node not in path_so_far:
+            new_path = path_so_far + [node]
+            for p in day_12_generate_paths(new_path, connections):
+                extended_paths.append(p)
+    return extended_paths
+
+
+def day_12_part_two_generate_paths(path_so_far: [str], connections: [(str, str)]) -> [[str]]:
+    next_nodes = day_12_list_connected_nodes(path_so_far[-1], connections)
+    extended_paths = []
+
+    def small_cave_is_allowed(cave: str) -> bool:
+        visited_small_caves = set(filter(lambda n: n.islower(), path_so_far))
+        if all([path_so_far.count(cave) == 1 for cave in visited_small_caves]):
+            return True
+        return cave not in path_so_far
+
+    for node in next_nodes:
+        if node == "start":
+            continue
+        if node == "end":
+            extended_paths.append(path_so_far + ["end"])
+        elif node.isupper() or small_cave_is_allowed(node):
+            new_path = path_so_far + [node]
+            for p in day_12_part_two_generate_paths(new_path, connections):
+                extended_paths.append(p)
+    return extended_paths
+
+
+def day_12_load_all_connections(raw_strings: [str]) -> [(str, str)]:
+    return list(map(day_12_parse_path, raw_strings))
+
+
+def day_12_parse_path(dash_path: str) -> (str, str):
+    a, _, b = dash_path.partition("-")
+    return a, b
+
+
+def day_12_list_connected_nodes(this_node: str, all_connections: [(str, str)]) -> [str]:
+    starting_points = filter(lambda c: this_node in c, all_connections)
+    return [day_12_the_other_one(stp, this_node) for stp in starting_points]
+
+
+def day_12_the_other_one(the_tuple: (), this_one: object) -> object:
+    t_1, t_2 = the_tuple
+    return t_2 if t_1 == this_one else t_1
+
+
+day_11_flash_count, day_11_it_happened = 0, False
+
+
+def day_11_part_one(starting_layout: [[int]], iterations: int) -> int:
+    global day_11_flash_count
+    day_11_flash_count = 0
+    # print(f'Before Part One: {day_11_print_grid(starting_layout)} Flash count: {day_11_flash_count}')
+    processed_layout = starting_layout
+    for it in range(iterations):
+        # print("================")
+        processed_layout = day_11_reset_flashers(day_11_flash_step(processed_layout))
+        if day_11_it_happened:
+            print(f'FFS it actually happened!! On iteration {it + 1}')
+            break
+        # day_11_print_grid(processed_layout)
+    # print(f'After Part One: {day_11_print_grid(processed_layout)}')
+    return day_11_flash_count
+
+
+def day_11_global_energy_increment(all_fish: [[int]]) -> [[int]]:
+    return [[e + 1 for e in row] for row in all_fish]
+
+
+def day_11_flash_step(octopi: [[int]]) -> [[int]]:
+    x_max, y_max = len(octopi[0]), len(octopi)
+    octopi = day_11_global_energy_increment(octopi)
+    iterate = True
+    flashed = []
+    global day_11_flash_count, day_11_it_happened
+    while iterate:
+        iterate = False
+        for y, row in enumerate(octopi):
+            for x, octopus in enumerate(row):
+                location = Point(x, y)
+                if octopus > 9 and location not in flashed:
+                    for n_x, n_y in day_11_get_all_neighbours(location, x_max, y_max):
+                        octopi[n_y][n_x] += 1
+                    flashed.append(location)
+                    day_11_flash_count += 1
+                    iterate = True
+    octopi = day_11_reset_flashers(octopi)
+    if len(flashed) == x_max * y_max:
+        day_11_it_happened = True
+    return octopi
+
+
+def day_11_reset_flashers(octopi: [[int]]) -> [[int]]:
+    def reset_if_flashed(energy_level: int) -> int:
+        if energy_level > 9:
+            return 0
+        return energy_level
+
+    return [list(map(reset_if_flashed, o_row)) for o_row in octopi]
+
+
+def day_11_get_all_neighbours(location: (int, int),
+                              x_bound: int, y_bound: int) -> [(int, int)]:
+    def is_valid_point(p: (int, int)) -> bool:
+        if p == location:
+            return False
+        x_p, y_p = p
+        if -1 < x_p < x_bound and -1 < y_p < y_bound:
+            return True
+        return False
+
+    x, y = location
+    offsets = list(product(range(-1, 2), range(-1, 2)))
+    surrounds = [(x + o_x, y + o_y) for o_x, o_y in offsets]
+    return list(filter(is_valid_point, surrounds))
+
+
+def day_11_print_grid(octopi: [[int]]):
+    string = '\n'.join([''.join([f"{i}" for i in row]) for row in octopi])
+    print(string)
 
 
 def day_10_part_one(raw_inputs: [str]) -> int:
