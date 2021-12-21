@@ -2,6 +2,128 @@ from main import Puzzle, Point
 import main
 
 
+class TestDayEighteen:
+    example_homework = """[[[0,[5,8]],[[1,7],[9,6]]],[[4,[1,2]],[[1,4],2]]]
+[[[5,[2,8]],4],[5,[[9,9],0]]]
+[6,[[[6,2],[5,6]],[[7,6],[4,7]]]]
+[[[6,[0,7]],[0,9]],[4,[9,[9,0]]]]
+[[[7,[6,4]],[3,[1,3]]],[[[5,5],1],9]]
+[[6,[[7,3],[3,2]]],[[[3,8],[5,7]],4]]
+[[[[5,4],[7,7]],8],[[8,3],8]]
+[[9,3],[[9,9],[6,[4,9]]]]
+[[2,[[7,7],7]],[[5,8],[[9,3],[0,2]]]]
+[[[[5,2],5],[8,[3,7]]],[[5,[7,5]],[4,4]]]"""
+    magnitude_examples = """[[1,2],[[3,4],5]] becomes 143.
+[[[[0,7],4],[[7,8],[6,0]]],[8,1]] becomes 1384.
+[[[[1,1],[2,2]],[3,3]],[4,4]] becomes 445.
+[[[[3,0],[5,3]],[4,4]],[5,5]] becomes 791.
+[[[[5,0],[7,4]],[5,5]],[6,6]] becomes 1137.
+[[[[8,7],[7,7]],[[8,6],[7,7]]],[[[0,7],[6,6]],[8,7]]] becomes 3488."""
+
+    def test_magnitudes(self):
+        assert main.day_18_split_expression("[9,1]") == ("9", "1")
+        assert main.day_18_split_expression("[[1,2],3]") == ("[1,2]", "3")
+        assert main.day_18_split_expression("[9,[8,7]]") == ("9", "[8,7]")
+        assert main.day_18_magnitude("[9,1]") == 29
+        input_result_pairs = {}
+        for text_row in Puzzle.convert_input(self.magnitude_examples, None):
+            expression, _, result = text_row.strip('.').partition(' becomes ')
+            input_result_pairs[expression] = int(result)
+
+        for k in input_result_pairs.keys():
+            assert k.count('[') == k.count(']')
+            assert main.day_18_magnitude(k) == input_result_pairs[k]
+        print(input_result_pairs)
+
+    def test_explosions(self):
+        examples = {
+            "[[[[[9,8],1],2],3],4]": "[[[[0,9],2],3],4]",
+            "[7,[6,[5,[4,[3,2]]]]]": "[7,[6,[5,[7,0]]]]",
+            "[[6,[5,[4,[3,2]]]],1]": "[[6,[5,[7,0]]],3]",
+            "[[3,[2,[1,[7,3]]]],[6,[5,[4,[3,2]]]]]":
+                main.day_18_reduce("[[3,[2,[8,0]]],[9,[5,[4,[3,2]]]]]"),
+            "[[3,[2,[8,0]]],[9,[5,[4,[3,2]]]]]":
+                main.day_18_reduce("[[3,[2,[8,0]]],[9,[5,[7,0]]]]"),
+            # last two require two explosions, whereas the test cases are for single explosion
+        }
+        # reduction bug-fix test:
+        # assert main.day_18_reduce("[[[[0,7],4],[7,[[8,4],9]]]]") == "[[[[0,7],4],[[7,8],[0,[6,7]]]]]"
+        for test_expr, result in examples.items():
+            assert main.day_18_reduce(test_expr) == result
+
+        # explode_candidate = "[[[0,[[5,0],[[9,3]]]]]]"
+        # assert main.day_18_reduce(explode_candidate) == "[[[5,[0,[[9,3]]]]]]"
+        # level_6_explosion = "[[[[0,[[5,0],[[9,3]]]]]]"
+        # main.day_18_reduce(level_6_explosion)
+
+    def test_split(self):
+        number = "[11,2]"
+        assert main.day_18_reduce(number) == "[[5,6],2]"
+        number = "[14,9]"
+        assert main.day_18_reduce(number) == "[[7,7],9]"
+
+    def test_addition(self):
+        print('ADDITION')
+        assert main.day_18_addition("[[[[4,3],4],4],[7,[[8,4],9]]]", "[1,1]") == \
+               "[[[[0,7],4],[[7,8],[6,0]]],[8,1]]"
+        number_list = [f"[{n},{n}]" for n in range(1, 5)]
+        print(number_list)
+        assert main.day_18_cumulative_addition(number_list) == "[[[[1,1],[2,2]],[3,3]],[4,4]]"
+        num_list_5 = [f"[{n},{n}]" for n in range(1, 6)]
+        assert main.day_18_cumulative_addition(num_list_5) == "[[[[3,0],[5,3]],[4,4]],[5,5]]"
+        num_list_6 = [f"[{n},{n}]" for n in range(1, 7)]
+        assert main.day_18_cumulative_addition(num_list_6) == "[[[[5,0],[7,4]],[5,5]],[6,6]]"
+        example_list = Puzzle.convert_input(self.example_homework, None)
+        # print('EXAMPLE LIST:')
+        # for el in example_list:
+        #     print(el)
+        # assert main.day_18_cumulative_addition(example_list) ==\
+        #        "[[[[6,6],[7,6]],[[7,7],[7,0]]],[[[7,7],[7,7]],[[7,8],[9,9]]]]"
+        slightly_larger_eg = """[[[0,[4,5]],[0,0]],[[[4,5],[2,6]],[9,5]]]
+[7,[[[3,7],[4,3]],[[6,3],[8,8]]]]
+[[2,[[0,8],[3,4]]],[[[6,7],1],[7,[1,6]]]]
+[[[[2,4],7],[6,[0,5]]],[[[6,8],[2,8]],[[2,1],[4,5]]]]
+[7,[5,[[3,8],[1,4]]]]
+[[2,[2,2]],[8,[8,1]]]
+[2,9]
+[1,[[[9,3],9],[[9,0],[0,7]]]]
+[[[5,[7,4]],7],1]
+[[[[4,2],2],6],[8,7]]"""
+        sle_list = Puzzle.convert_input(slightly_larger_eg, None)
+        main.day_18_cumulative_addition(sle_list)
+
+
+class TestDaySeventeen:
+    def test_trajectory_calcs(self):
+        assert main.day_17_trajectory_step(Point(0, 0), Point(10, 10)) == ((10, 10), (9, 9))
+        step_one = main.day_17_trajectory_step(Point(0, 0), Point(6, 6))
+        assert main.day_17_trajectory_step(*step_one) == ((11, 11), (4, 4))
+        target_area = ((20, 30), (-10, -5))
+        assert main.day_17_velocity_hits_target(Point(7, 2), target_area)
+        assert main.day_17_velocity_hits_target(Point(6, 3), target_area)
+        assert main.day_17_velocity_hits_target(Point(9, 0), target_area)
+        assert not main.day_17_velocity_hits_target(Point(17, -4), target_area)
+        assert main.day_17_peak_given_starting_y_velocity(2) == 3
+        assert main.day_17_peak_given_starting_y_velocity(3) == 6
+        assert main.day_17_peak_given_starting_y_velocity(0) == 0
+
+    def test_part_one(self):
+        target_area = ((20, 30), (-10, -5))
+        assert main.day_17_part_one(target_area) == 45
+        big_target = ((119, 176), (-141, -84))
+        solution = main.day_17_part_one(big_target)
+        print(f'Part One solution: {solution}')
+        assert solution == 9870
+
+    def test_part_two(self):
+        eg_target = ((20, 30), (-10, -5))
+        assert main.day_17_part_two(eg_target) == 112
+        big_target = ((119, 176), (-141, -84))
+        solution = main.day_17_part_two(big_target)
+        print(f'Part Two solution: {solution}')
+        assert solution == 5523
+
+
 class TestDaySixteen:
     part_one_examples = {
         "8A004A801A8002F478": 16,
@@ -71,6 +193,36 @@ class TestDaySixteen:
         solution = p1_packet.get_version_sum()
         print(f'Part One solution is {solution}.  ({bits_read} bits read)')
         assert solution == 969
+
+    def test_evaluation(self):
+        encoded_binary = "101111111000101000"
+        assert main.day_16_get_value_from_literal(encoded_binary) == 2021
+        literal_packet = main.Day16Packet(self.literal_example)
+        literal_packet.read_packet()
+        assert literal_packet.get_value() == 2021
+        operations_packets = {
+            "C200B40A82": 3,
+            "04005AC33890": 54,
+            "880086C3E88112": 7,
+            "CE00C43D881120": 9,
+            "D8005AC2A8F0": 1,
+            "F600BC2D8F": 0,
+            "9C005AC2F8F0": 0,
+            "9C0141080250320F1802104A08": 1,
+        }
+        for op_hex, expected in operations_packets.items():
+            op_pkt = main.Day16Packet(op_hex)
+            op_pkt.read_packet()
+            assert op_pkt.get_value() == expected
+
+    def test_part_two(self):
+        p2_packet = main.Day16Packet(Puzzle(16).get_text_input())
+        p2_packet.read_packet()
+        solution = p2_packet.get_value()
+        print(f'Part Two solution is {solution}')
+        assert solution
+
+
 
 
 

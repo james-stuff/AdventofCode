@@ -1,6 +1,7 @@
 from collections import namedtuple
 from itertools import product, combinations
 import random
+import re
 
 
 class Puzzle:
@@ -43,6 +44,181 @@ def invert_binary(binary: []) -> [bool]:
 # TODO: look at Barry's code
 # dataclasses
 
+def day_18_cumulative_addition(terms: [str]) -> str:
+    result = terms[0]
+    for trm in terms[1:]:
+        result = day_18_addition(result, trm)
+    return result
+
+
+def day_18_addition(left_term: str, right_term: str) -> str:
+    print(f'ADDING {left_term} &&&&& {right_term}')
+    new_pair = f'[{left_term},{right_term}]'
+    return day_18_reduce(new_pair)
+
+
+def day_18_reduce(expression: str) -> str:
+    # TODO; Destination number could be double digits!
+    #   - on either side
+    #   either of the replaced numbers could be double digits
+    #   there might be no number to replace in either direction
+    #   make sure all explosion possibilities are exhausted before starting on splits
+    def replace_adjacent_number(number_index: int, go_right=False) -> str:
+        replacement_offset = 0
+        this_number = int(expression[number_index])
+        assert this_number < 20
+        expr_slice = slice(number_index + 1, len(expression)) if go_right \
+            else slice(number_index - 1, 0, -1)
+        # DOUBLE-DIGIT NUMBER CHECK:
+        if not go_right and expression[number_index - 1].isnumeric():
+            this_number = int(expression[number_index - 1:number_index + 1])
+            print(f'** FOUND DOUBLE-DIGIT NUMBER TO LEFT: {this_number}')
+            expr_slice = slice(number_index - 2, 0, -1)
+        elif expression[number_index + 1].isnumeric():
+            this_number = int(expression[number_index:number_index + 2])
+            print(f'** FOUND DOUBLE-DIGIT NUMBER TO RIGHT: {this_number}')
+            expr_slice = slice(number_index + 2, len(expression))
+
+        double_digit_dest = False
+        for ind, ch in enumerate(expression[expr_slice]):
+            if ch.isnumeric():
+                replacement_offset = ind
+                double_digit_dest = expression[expr_slice][ind + 1].isnumeric()
+                if this_number > 9:
+                    replacement_offset += 1
+                break
+        if replacement_offset:
+            repl_index = number_index + replacement_offset + 1 if go_right \
+                else number_index - replacement_offset - 1
+            # if expression[repl_index:repl_index + 1 + double_digit_dest] == "7,":
+            #     print('hi')
+            dest_slice = slice(repl_index - (double_digit_dest if not go_right else 0),
+                               repl_index + 1 + (double_digit_dest if go_right else 0))
+            new_number = int(expression[dest_slice]) + this_number
+            # new_number = int(expression[repl_index:repl_index + 1 + double_digit_dest]) + this_number
+            assert new_number < 100
+            return f'{expression[:repl_index]}{new_number}{expression[repl_index + 1 + double_digit_dest:]}'
+        return expression
+
+    need_to_reduce = True
+    can_split = False
+    while need_to_reduce:
+        open_bracket_count = 0
+        for index, char in enumerate(expression):
+            if char == '[':
+                open_bracket_count += 1
+            elif char == ']':
+                open_bracket_count -= 1
+            if open_bracket_count == 5:
+                can_split = False
+                if char == ",":
+                    left_dd_offset = expression[index - 2].isnumeric()
+                    right_dd_offset = expression[index + 2].isnumeric()
+                    if right_dd_offset:
+                        print(f'DOUBLE-DIGITS!!! right dd offset is {right_dd_offset}')
+                    original_expr_len = len(expression)
+                    expression = replace_adjacent_number(index - 1)
+                    if len(expression) > original_expr_len:
+                        index += 1
+                    expression = replace_adjacent_number(index + 1, go_right=True)
+                    expression = f'{expression[:index - 2 - left_dd_offset]}0' \
+                                 f'{expression[index + 3 + right_dd_offset:]}'
+                    print(f'Explosion -> {expression}')
+                    # assert day_18_bracket_consistency_check(expression)
+                    break
+            elif char.isnumeric() and expression[index - 1].isnumeric() and can_split:
+                dd_number = int(expression[index - 1:index + 1])
+                expression = f'{expression[:index - 1]}[{dd_number // 2},' \
+                             f'{(dd_number // 2) + (1 if dd_number % 2 == 1 else 0)}]' \
+                             f'{expression[index + 1:]}'
+                print(f'Split -> {expression}')
+                break
+            if index == len(expression) - 1:
+                if can_split:
+                    need_to_reduce = False
+                can_split = True
+    return expression
+
+
+def day_18_bracket_consistency_check(expression: str) -> bool:
+    open_bracket_count = 0
+    for index, char in enumerate(expression):
+        if char == '[':
+            open_bracket_count += 1
+        elif char == ']':
+            open_bracket_count -= 1
+    return open_bracket_count == 0
+
+
+def day_18_magnitude(expression: str) -> int:
+    l_expression, r_expression = day_18_split_expression(expression)
+    l_magnitude = 3 * (int(l_expression) if l_expression.isnumeric()
+                       else day_18_magnitude(l_expression))
+    r_magnitude = 2 * (int(r_expression) if r_expression.isnumeric()
+                       else day_18_magnitude(r_expression))
+    return l_magnitude + r_magnitude
+
+
+def day_18_split_expression(expression: str) -> (str, str):
+    open_bracket_count = 0
+    for index, char in enumerate(expression):
+        if char == '[':
+            open_bracket_count += 1
+        elif char == ']':
+            open_bracket_count -= 1
+        if open_bracket_count == 1 and char == ',':
+            return expression[1:index], expression[index + 1:-1]
+    return "ERROR!"
+
+
+def day_17_part_two(target_area: ((int, ), )) -> int:
+    x_range, y_range = target_area
+    print(f'Starting from y = {min(y_range)}')
+    return sum([day_17_velocity_hits_target(Point(x, y), target_area)
+                for x in range(max(x_range) + 1)
+                for y in range(min(y_range), 150)])
+    # successes = 0
+    # for x in range((max(x_range) + 1) // 2):
+    #     for y in range(min(y_range), 150):
+    #         successes += day_17_velocity_hits_target(Point(x, y), target_area)
+    # return successes
+
+
+def day_17_part_one(target_area: ((int, ), )) -> int:
+    x_range, y_range = target_area
+    greatest_y_velocity = 0
+    for x in range((max(x_range) + 1) // 2):
+        for y in range(150):
+            if day_17_velocity_hits_target(Point(x, y), target_area):
+                greatest_y_velocity = max(greatest_y_velocity, y)
+    return day_17_peak_given_starting_y_velocity(greatest_y_velocity)
+
+
+def day_17_peak_given_starting_y_velocity(y_velocity: int) -> int:
+    return sum([*range(y_velocity + 1)])
+
+
+def day_17_velocity_hits_target(velocity: (int, ), target: ((int,), )) -> bool:
+    initial_velocity = velocity
+    x, y = Point(0, 0)
+    x_range, y_range = target
+    while x <= max(x_range) and y >= min(y_range):
+        new_point, velocity = day_17_trajectory_step(Point(x, y), velocity)
+        x, y = new_point
+        if min(x_range) <= x <= max(x_range) and min(y_range) <= y <= max(y_range):
+            print(f'Velocity: {initial_velocity} -> ({x}, {y}).')
+            return True
+    # print(f'Velocity: {initial_velocity} -> Reaches ({x}, {y}) without hitting target')
+    return False
+
+
+def day_17_trajectory_step(start: (int, ), velocity: (int, )) -> ((int, ), (int, )):
+    """Assumes x-component of velocity would never be < 0"""
+    next_point = Point(start.x + velocity.x, start.y + velocity.y)
+    next_velocity = Point(max(velocity.x - 1, 0), velocity.y - 1)
+    return next_point, next_velocity
+
+
 # TODO for Day 16:
 #   string to work with is the whole remaining hex string?
 #   convert it to binary
@@ -55,12 +231,17 @@ class Day16Packet:
     def __init__(self, data_string: str, convert_to_binary=True):
         self.binary = day_16_hex_string_to_binary(data_string.strip()) \
             if convert_to_binary else data_string
-        self.version_sum = 0
+        self.version_sum, self.value = 0, 0
+        self.sub_packet_values = []
 
     def read_packet(self):
         self.version_sum += binary_to_int(self.binary[:3])
         if day_16_packet_is_operator(self.binary):
             length_is_number_of_sub_packets = int(self.binary[6])
+            operator = binary_to_int(self.binary[3:6])
+            print('\n')
+            print(f'Operator = {operator}')
+            print(f'Binary: {self.binary}')
             if length_is_number_of_sub_packets:
                 sub_packets = binary_to_int(self.binary[7:18])
                 index = 18
@@ -71,17 +252,42 @@ class Day16Packet:
                 index = 22
                 while index < 22 + bit_length:
                     index = self.read_next_sub_packet(index)
+            print(f'Sub-packet values: {self.sub_packet_values}')
+            if operator == 0:
+                self.value = sum(self.sub_packet_values)
+            elif operator == 1:
+                self.value = self.sub_packet_values[0]
+                if len(self.sub_packet_values) > 1:
+                    for spv in self.sub_packet_values[1:]:
+                        self.value *= spv
+            elif operator == 2:
+                self.value = min(self.sub_packet_values)
+            elif operator == 3:
+                self.value = max(self.sub_packet_values)
+            elif operator == 5:
+                self.value = 1 if self.sub_packet_values[0] > self.sub_packet_values[1] else 0
+            elif operator == 6:
+                self.value = 1 if self.sub_packet_values[0] < self.sub_packet_values[1] else 0
+            elif operator == 7:
+                self.value = 1 if self.sub_packet_values[0] == self.sub_packet_values[1] else 0
             return index
+        print(f'Literal binary: {self.binary}')
+        self.value = day_16_get_value_from_literal(self.binary[6:day_16_get_literal_binary_length(self.binary, True)])
+        print(f'Found literal value: {self.value}')
         return day_16_get_literal_binary_length(self.binary, True)
 
     def read_next_sub_packet(self, index: int) -> int:
         next_packet = Day16Packet(self.binary[index:], False)
         index += next_packet.read_packet()
         self.version_sum += next_packet.get_version_sum()
+        self.sub_packet_values.append(next_packet.get_value())
         return index
 
     def get_version_sum(self):
         return self.version_sum
+
+    def get_value(self):
+        return self.value
 
     def get_length_in_hex_chars(self) -> int:
         if day_16_packet_is_operator(self.binary):
@@ -109,6 +315,12 @@ class Day16Packet:
         if day_16_packet_is_operator(self.binary):
             return 0
         return day_16_get_literal_binary_length(self.binary, True)
+
+
+def day_16_get_value_from_literal(binary: str) -> int:
+    segments = len(binary) // 5
+    string = ''.join([binary[seg * 5 + 1:seg * 5 + 5] for seg in range(segments)])
+    return binary_to_int(string)
 
 
 def day_16_get_literal_binary_length(binary: str, is_sub_packet: bool = False) -> int:
