@@ -1,7 +1,7 @@
 from collections import namedtuple
-from itertools import product, combinations
+from itertools import product, permutations, combinations_with_replacement, cycle
 import random
-import re
+from math import prod as product
 
 
 class Puzzle:
@@ -10,6 +10,10 @@ class Puzzle:
 
     def get_text_input(self) -> str:
         with open(f'inputs\\input{self.day}.txt', 'r') as input_file:
+            return input_file.read()
+
+    def get_text_from_filename(self, txt_file_name: str) -> str:
+        with open(f'inputs\\{txt_file_name}.txt', 'r') as input_file:
             return input_file.read()
 
     def input_as_list(self, conversion_func: object = int) -> []:
@@ -43,6 +47,385 @@ def invert_binary(binary: []) -> [bool]:
 
 # TODO: look at Barry's code
 # dataclasses
+def day_22_load_data(raw_input: str, all_space: bool = False) -> [(str,)]:
+    raw_lines = Puzzle.convert_input(raw_input, None)
+    converted_data = []
+    for line in raw_lines:
+        on_or_off, raw_dims = tuple(line.split(" "))
+        dims = day_22_get_cuboid_dimensions(raw_dims)
+        if all_space or all([-50 <= d <= 50 for d in dims]):
+            converted_data.append((on_or_off, dims))
+    return converted_data
+
+
+def day_22_part_one(raw_input: str) -> int:
+    data = day_22_load_data(raw_input)
+    active_points = set()
+    for step in data:
+        action, dims = step
+        if action == "on":
+            print('turning on:')
+            active_points = active_points.union(day_22_create_cuboid(dims))
+        else:
+            print('turning off:')
+            active_points = active_points.difference(day_22_create_cuboid(dims))
+    return len(active_points)
+
+
+def day_22_create_cuboid(dimensions: [int]) -> {object}:
+    x_min, x_max, y_min, y_max, z_min, z_max = tuple(dimensions)
+    cuboid = set()
+    for z in range(z_min, z_max + 1):
+        for y in range(y_min, y_max + 1):
+            for x in range(x_min, x_max + 1):
+                cuboid.add(Point3(x, y, z))
+    return cuboid
+
+
+def day_22_get_cuboid_dimensions(cuboid_dims: str) -> [int]:
+    numbers = []
+    for dimension in cuboid_dims.split(","):
+        _, _, bounds = dimension.partition("=")
+        start, _, end = bounds.partition("..")
+        numbers += [int(dim) for dim in (start, end)]
+    # print(numbers)
+    return numbers
+
+
+def day_22_part_two(raw_text: str) -> int:
+    data = day_22_load_data(raw_text, all_space=True)
+    return day_22_solve_part_two(data)
+
+
+def day_22_solve_part_two(data: [(str, [int])]) -> int:
+    total_on = 0
+    for outer_index, data_row in enumerate(data):
+        state, this_cuboid = data_row
+        new_volume = day_22_get_cuboid_size(this_cuboid)
+        if state == 'on':
+            total_on += new_volume
+        for inner_index, inner_row in enumerate(data[:outer_index]):
+            inner_state, inner_dim = inner_row
+            if inner_state == 'on':
+                overlap_volume = day_22_calc_overlap_size(this_cuboid, inner_dim)
+
+            total_on -= overlap_volume
+    return total_on
+
+
+def day_22_get_cuboid_size(dims: [int]) -> int:
+    lengths = [dims[(i * 2) + 1] - d + 1 for i, d in enumerate(dims[::2])]
+    if any([length < 0 for length in lengths]):
+        return 0
+    return product(lengths)
+
+
+def day_22_calc_overlap_size(cuboid_1: [int], cuboid_2: [int]) -> int:
+    zipped = list(zip(cuboid_1, cuboid_2))
+    overlap_dims = []
+    for i, zc in enumerate(zipped):
+        overlap_dims.append(min(zc) if i % 2 else max(zc))
+    return day_22_get_cuboid_size(overlap_dims)
+
+
+def day_21_load_data(raw_text: str) -> (int,):
+    return (int(line[-1]) for line in raw_text.split('\n'))
+
+
+def day_21_part_two(raw_text: str) -> int:
+    p1_univs_per_turns, p2_univs_per_turns = (day_21_universes_by_no_of_turns(pp)
+                                              for pp in day_21_load_data(raw_text))
+    p1_routes, p2_routes = (day_21_find_all_routes_to_21(p)
+                            for p in day_21_load_data(raw_text))
+    combinations_dict = day_21_get_number_of_combinations_per_total()
+    p1_wins = 0
+    for no_of_turns, universes in p1_univs_per_turns.items():
+        valid_p2_routes = filter(lambda rt: len(rt) >= no_of_turns, p2_routes)
+        short_p2_routes = set([tuple(route[:no_of_turns - 1]) for route in valid_p2_routes])
+        p1_wins += universes * sum([day_21_calc_universes_for_route(rt, combinations_dict,
+                                                                    limit=no_of_turns - 1)
+                                    for rt in short_p2_routes])
+
+    p2_wins = 0
+    for no_of_turns, universes in p2_univs_per_turns.items():
+        valid_p1_routes = filter(lambda rt: len(rt) > no_of_turns, p1_routes)
+        short_p1_routes = set([tuple(route[:no_of_turns]) for route in valid_p1_routes])
+        p2_wins += universes * sum([day_21_calc_universes_for_route(rt, combinations_dict,
+                                                                    limit=no_of_turns)
+                                    for rt in short_p1_routes])
+    return max(p1_wins, p2_wins)
+
+
+def day_21_universes_by_no_of_turns(start_pos: int) -> dict:
+    combinations_dict = day_21_get_number_of_combinations_per_total()
+    universes_by_no_of_turns = {}
+    all_routes = day_21_find_all_routes_to_21(start_pos)
+    for route in all_routes:
+        length = len(route)
+        universes = day_21_calc_universes_for_route(route, combinations_dict)
+        if length in universes_by_no_of_turns:
+            universes_by_no_of_turns[length] += universes
+        else:
+            universes_by_no_of_turns[length] = universes
+    return universes_by_no_of_turns
+
+
+def day_21_calc_universes_for_route(route: [int], comb_dict: dict,
+                                    limit: int = 20) -> int:
+    total = comb_dict[route[0]]
+    for dice_total in route[1:limit]:
+        total *= comb_dict[dice_total]
+    return total
+
+
+def day_21_find_all_routes_to_21(starting_position: int) -> [[int]]:
+    winning_rolls = []
+    sequences_under_consideration = [[total] for total in range(3, 10)]
+    while sequences_under_consideration:
+        next_round = []
+        for seq in sequences_under_consideration:
+            for tot in range(3, 10):
+                seq_with_next_roll = seq + [tot]
+                if day_21_score_roll_sequence(seq_with_next_roll, starting_position) >= 21:
+                    winning_rolls.append(seq_with_next_roll)
+                else:
+                    next_round.append(seq_with_next_roll)
+        sequences_under_consideration = next_round
+    return winning_rolls
+
+
+def day_21_score_roll_sequence(sequence: [int], start_pos: int) -> int:
+    score = 0
+    position = start_pos
+    for roll in sequence:
+        position = (position + roll) % 10
+        if position == 0:
+            position = 10
+        score += position
+    return score
+
+
+def day_21_get_number_of_combinations_per_total() -> {int: int}:
+    combo_counts = {k: 0 for k in range(3, 10)}
+    dice = (range(1, 4) for _ in range(3))
+    three_two_one = product(*dice)
+    for combo in three_two_one:
+        combo_counts[sum(combo)] += 1
+    return combo_counts
+
+
+def day_21_part_one(starting_spaces: (int,)):
+    def scores() -> (int,):
+        return (scr for _, scr in data.values())
+
+    n_rolls = 0
+    die = cycle([*range(1, 101)])
+    player_id = cycle([0, 1])
+    positions = tuple(starting_spaces)
+    data = {p_id: (st, 0) for p_id, st in zip((0, 1), positions)}
+    while max(scores()) < 1000:
+        pl_index = next(player_id)
+        position, score = data[pl_index]
+        position = (position + sum([next(die) for _ in range(3)])) % 10
+        n_rolls += 3
+        if position == 0:
+            position = 10
+        score += position
+        data[pl_index] = position, score
+    losing_score = min(scores())
+    return losing_score * n_rolls
+
+
+def day_20_part_one(raw_lines: [str]) -> int:
+    algorithm, image = day_20_load_data(raw_lines)
+    for _ in range(2):
+        image = day_20_process_image(image, algorithm)
+        print('         Image Starts:')
+        print('\n'.join(image))
+    return sum([ln.count('#') for ln in image])
+
+
+def day_20_load_data(raw_lines: [str]) -> (str, [str]):
+    algorithm, input_image = '', []
+    for rl in raw_lines:
+        if len(algorithm) < 512:
+            algorithm += rl
+        elif len(rl) > 0:
+            input_image.append(rl)
+    return algorithm, input_image
+
+
+def day_20_process_image(image: [str], algorithm: str) -> [str]:
+    image = day_20_resize_image(image)
+    width, height = len(image[0]), len(image)
+    if width > 99:
+        print('hi')
+    processed = []
+    for row_id in range(1, height - 1):
+        new_row = ''
+        for x in range(1, width - 1):
+            surrounding_string = day_20_get_surrounding_string(Point(x, row_id), image)
+            binary_list = [day_20_universal_convertor(ch) for ch in surrounding_string]
+            alg_ind = binary_to_int(binary_list)
+            new_row += algorithm[alg_ind]
+        processed += [new_row]
+    return processed
+
+
+def day_20_get_surrounding_string(pixel_loc: (int,), whole_image: [str]) -> str:
+    x, y = pixel_loc
+    return ''.join([whole_image[row][x - 1:x + 2] for row in range(y - 1, y + 2)])
+
+
+def day_20_resize_image(image: [str]) -> [str]:
+    """extend the image by 2 pixels on every side, from max. indices for '#' character"""
+    if len(image) > 99:
+        print('hi')
+    rows_with_lit_pixels = [i for i, row in enumerate(image) if '#' in row]
+    y_min, y_max = tuple(func(rows_with_lit_pixels) for func in (min, max))
+    x_max = max([row.rfind('#') for row in image])
+    x_min = min([row.find('#') for row in image if '#' in row])
+    top_bottom_rows = ["." * ((x_max - x_min + 1) + 4)] * 2
+    middle_rows = [f'..{row[x_min:x_max + 1]}..' for row in image[y_min:y_max + 1]]
+    return top_bottom_rows + middle_rows + top_bottom_rows
+
+
+def day_20_universal_convertor(item_in: object) -> object:
+    return {'.': False, '#': True, True: '#', False: '.'}[item_in]
+
+
+def day_19_part_two(raw_lines: [str]) -> int:
+    scanners = day_19_load_scanner_data(raw_lines)
+    all_offsets = day_19_find_all_scanner_offsets(scanners)
+    greatest_distance = 0
+    for off in all_offsets:
+        for other_point in all_offsets:
+            greatest_distance = max(greatest_distance, day_19_manhattan_distance(off, other_point))
+    return greatest_distance
+
+
+def day_19_part_one(raw_lines: [str]) -> int:
+    scanners = day_19_load_scanner_data(raw_lines)
+    return day_19_count_beacons(scanners)
+
+
+def day_19_count_beacons(scanner_obs: dict) -> int:
+    scanner_known_points = {0: scanner_obs[0]}
+    while len(scanner_known_points) < len(scanner_obs):
+        for scanner_id, point_list in scanner_obs.items():
+            if scanner_id not in scanner_known_points:
+                print(f'looking at scanner id {scanner_id}:')
+                for tr in day_19_transforms:
+                    transformed_points = [day_19_do_transformation(pt, tr) for pt in point_list]
+                    for other_sc_id in scanner_known_points.keys():
+                        offsets = [day_19_point_difference(tr_pt, known_pt)
+                                   for tr_pt in transformed_points
+                                   for known_pt in scanner_known_points[other_sc_id]]
+                        for ofs in offsets:
+                            overlaps = len([*filter(lambda o: o == ofs, offsets)])
+                            if overlaps >= 12:
+                                print(f'There are {len(offsets)} offsets, {overlaps} overlaps')
+                                print(f'Offset is {ofs}')
+                                scanner_known_points[scanner_id] = \
+                                    [day_19_add_offset_to_point(pt_tr, ofs) for pt_tr in
+                                     transformed_points]
+                                break
+                        if scanner_id in scanner_known_points:
+                            break
+                    if scanner_id in scanner_known_points:
+                        break
+    known_beacons = set([pt for pt_list in scanner_known_points.values() for pt in pt_list])
+    return len(known_beacons)
+
+
+def day_19_find_all_scanner_offsets(scanner_obs: dict) -> [(int,)]:
+    scanner_offsets = []
+    scanner_known_points = {0: scanner_obs[0]}
+    while len(scanner_known_points) < len(scanner_obs):
+        for scanner_id, point_list in scanner_obs.items():
+            if scanner_id not in scanner_known_points:
+                print(f'looking at scanner id {scanner_id}:')
+                for tr in day_19_transforms:
+                    transformed_points = [day_19_do_transformation(pt, tr) for pt in point_list]
+                    for other_sc_id in scanner_known_points.keys():
+                        offsets = [day_19_point_difference(tr_pt, known_pt)
+                                   for tr_pt in transformed_points
+                                   for known_pt in scanner_known_points[other_sc_id]]
+                        for ofs in offsets:
+                            overlaps = len([*filter(lambda o: o == ofs, offsets)])
+                            if overlaps >= 12:
+                                print(f'There are {len(offsets)} offsets, {overlaps} overlaps')
+                                print(f'Offset is {ofs}')
+                                scanner_known_points[scanner_id] = \
+                                    [day_19_add_offset_to_point(pt_tr, ofs) for pt_tr in
+                                     transformed_points]
+                                scanner_offsets.append(ofs)
+                                break
+                        if scanner_id in scanner_known_points:
+                            break
+                    if scanner_id in scanner_known_points:
+                        break
+    return scanner_offsets
+
+
+
+def day_19_manhattan_distance(point_1: (int,), point_2: (int,)) -> int:
+    return sum([abs(d_2 - d_1) for d_1, d_2 in zip(point_1, point_2)])
+
+
+def day_19_point_difference(point_1: (int,), point_2: (int,)) -> (int,):
+    x_1, y_1, z_1 = point_1
+    x_2, y_2, z_2 = point_2
+    return Point3(x_2 - x_1, y_2 - y_1, z_2 - z_1)
+
+
+def day_19_add_offset_to_point(point: (int,), offset: (int,)) -> (int,):
+    p_x, p_y, p_z = point
+    o_x, o_y, o_z = offset
+    return Point3(*(sum(dims) for dims in zip(point, offset)))
+
+
+def day_19_load_scanner_data(raw_lines: [str]) -> dict:
+    observations = {}
+    scanners = 0
+    for ln in raw_lines:
+        if "scanner" in ln:
+            observations[scanners] = []
+            scanners += 1
+        elif ln and (ln[0].isnumeric() or ln[0] == "-"):
+            observations[scanners - 1].append(Point3(*[int(ch) for ch in ln.split(",")]))
+    return observations
+
+
+def day_19_do_transformation(point: (int,), transformation: str) -> (int,):
+    x, y, z = point
+    return eval(f"Point3{transformation}")
+
+
+day_19_transforms = ["(x, y, z)", "(-y, x, z)", "(-x, -y, z)", "(y, -x, z)",
+              "(-x, y, -z)", "(-y, -x, -z)", "(x, -y, -z)", "(y, x, -z)",
+              "(-z, y, x)", "(-z, -x, y)", "(-z, -y, -x)", "(-z, x, -y)",
+              "(z, y, -x)", "(z, -x, -y)", "(z, -y, x)", "(z, x, y)",
+              "(x, -z, y)", "(y, -z, -x)", "(-x, -z, -y)", "(-y, -z, x)",
+              "(x, z, -y)", "(y, z, x)", "(-x, z, y)", "(-y, z, -x)"]
+Point3 = namedtuple("Point3", "x y z")
+
+
+def day_18_part_one(sum_list: [str]) -> int:
+    addition_result = day_18_cumulative_addition(sum_list)
+    return day_18_magnitude(addition_result)
+
+
+def day_18_part_two(sum_list: [str]) -> int:
+    answer = 0
+    perms = [*permutations(sum_list, 2)]
+    print(f'There are {len(perms)} possible sums from list of {len(sum_list)} sums: ')
+    for sum_1, sum_2 in perms:
+        print(f'{sum_1} + {sum_2}')
+        result = day_18_magnitude(day_18_addition(sum_1, sum_2))
+        answer = max(answer, result)
+    return answer
+
 
 def day_18_cumulative_addition(terms: [str]) -> str:
     result = terms[0]
@@ -64,6 +447,34 @@ def day_18_reduce(expression: str) -> str:
     #   there might be no number to replace in either direction
     #   make sure all explosion possibilities are exhausted before starting on splits
     def replace_adjacent_number(number_index: int, go_right=False) -> str:
+        print(f'original expression: {expression}')
+        lookup = day_18_get_number_positions(expression)
+        adjacent_number_index, old_number, this_number = 0, -1, -1
+        if go_right and max([*lookup.keys()]) > number_index:
+            adjacent_number_index = min([k for k in lookup.keys() if k > number_index])
+        elif (not go_right) and min([*lookup.keys()]) < number_index - 1:
+            adjacent_number_index = max([k for k in lookup.keys() if k < number_index - 1])
+        if adjacent_number_index:
+            old_number = lookup[adjacent_number_index]
+            if number_index in lookup:
+                this_number = lookup[number_index]
+            elif number_index - 1 in lookup:
+                this_number = lookup[number_index - 1]
+            print(f'This number is {this_number}')
+            if old_number > -1:
+                new_number = old_number + this_number
+                continuation_index = adjacent_number_index + 1
+                if old_number > 9:
+                    continuation_index += 1
+                print(f'Replacing {old_number}, to {"right" if go_right else "left"}, '
+                      f'with {new_number}')
+                return f'{expression[:adjacent_number_index]}{new_number}{expression[continuation_index:]}'
+            return expression
+
+            # if this_number == 14 and (not go_right):
+            #     print('hi')
+        print(f'Replacing {old_number if old_number > -1 else "no number"}, to {"right" if go_right else "left"}')
+
         replacement_offset = 0
         this_number = int(expression[number_index])
         assert this_number < 20
@@ -124,7 +535,7 @@ def day_18_reduce(expression: str) -> str:
                     expression = f'{expression[:index - 2 - left_dd_offset]}0' \
                                  f'{expression[index + 3 + right_dd_offset:]}'
                     print(f'Explosion -> {expression}')
-                    # assert day_18_bracket_consistency_check(expression)
+                    assert day_18_bracket_consistency_check(expression)
                     break
             elif char.isnumeric() and expression[index - 1].isnumeric() and can_split:
                 dd_number = int(expression[index - 1:index + 1])
@@ -138,6 +549,21 @@ def day_18_reduce(expression: str) -> str:
                     need_to_reduce = False
                 can_split = True
     return expression
+
+
+def day_18_get_number_positions(expression: str) -> dict:
+    number_positions = {}
+    numeric_indices = [i for i, ch in enumerate(expression) if ch.isnumeric()]
+    i_ni = 0
+    while i_ni < len(numeric_indices):
+        position = numeric_indices[i_ni]
+        number_positions[position] = int(expression[position])
+        if (i_ni < len(numeric_indices) - 1) and \
+                numeric_indices[i_ni + 1] == numeric_indices[i_ni] + 1:
+            number_positions[position] = int(expression[position:position + 2])
+            i_ni += 1
+        i_ni += 1
+    return number_positions
 
 
 def day_18_bracket_consistency_check(expression: str) -> bool:
@@ -372,6 +798,11 @@ def day_15_part_one(whole_grid: [[int]]):
         if x == edge_length - 1 or y == edge_length - 1:
             print('Edge is reached')
             break
+    if x == edge_length - 1:
+        total += sum([row[-1] for row in whole_grid[y + 1:]])
+    if y == edge_length - 1:
+        total += sum(whole_grid[y][x + 1:])
+    return total
 
 
 def day_15_get_min_path_total_across_square(square: [[int]]) -> ((int), int):
@@ -380,7 +811,7 @@ def day_15_get_min_path_total_across_square(square: [[int]]) -> ((int), int):
     best_paths = [k for k, v in all_paths.items() if v == min_total]
     if len(best_paths) > 1:
         print(f'There is more than one optimal path')
-        return best_paths[random.randrange(len(best_paths))]
+        return best_paths[random.randrange(len(best_paths))], min_total
     return [k for k, v in all_paths.items() if v == min_total][0], min_total
 
 

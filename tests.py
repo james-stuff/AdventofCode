@@ -1,5 +1,435 @@
 from main import Puzzle, Point
 import main
+import itertools
+
+
+class TestDayTwentyTwo:
+    example_text = """on x=10..12,y=10..12,z=10..12
+on x=11..13,y=11..13,z=11..13
+off x=9..11,y=9..11,z=9..11
+on x=10..10,y=10..10,z=10..10
+"""
+    larger_example = """on x=-20..26,y=-36..17,z=-47..7
+on x=-20..33,y=-21..23,z=-26..28
+on x=-22..28,y=-29..23,z=-38..16
+on x=-46..7,y=-6..46,z=-50..-1
+on x=-49..1,y=-3..46,z=-24..28
+on x=2..47,y=-22..22,z=-23..27
+on x=-27..23,y=-28..26,z=-21..29
+on x=-39..5,y=-6..47,z=-3..44
+on x=-30..21,y=-8..43,z=-13..34
+on x=-22..26,y=-27..20,z=-29..19
+off x=-48..-32,y=26..41,z=-47..-37
+on x=-12..35,y=6..50,z=-50..-2
+off x=-48..-32,y=-32..-16,z=-15..-5
+on x=-18..26,y=-33..15,z=-7..46
+off x=-40..-22,y=-38..-28,z=23..41
+on x=-16..35,y=-41..10,z=-47..6
+off x=-32..-23,y=11..30,z=-14..3
+on x=-49..-5,y=-3..45,z=-29..18
+off x=18..30,y=-20..-8,z=-3..13
+on x=-41..9,y=-7..43,z=-33..15
+on x=-54112..-39298,y=-85059..-49293,z=-27449..7877
+on x=967..23432,y=45373..81175,z=27513..53682
+"""
+
+    def test_init(self):
+        rows = main.day_22_load_data(self.example_text)
+        assert len(rows) == 4
+        assert len([*filter(lambda s: s[0] == "on", rows)]) == 3
+        bigger_rows = main.day_22_load_data(self.larger_example, all_space=True)
+        assert len(bigger_rows) == 22
+        assert len([*filter(lambda s: s[0] == "off", bigger_rows)]) == 5
+        assert len([*filter(lambda s: s[0] == "on", bigger_rows)]) == 17
+        for data in (rows, bigger_rows):
+            for r in data:
+                numbers = r[1]
+                assert all([numbers[(i * 2) + 1] >= v for i, v in enumerate(numbers[::2])])
+                assert all([-50 <= n <= 50 or n < -50 or n > 50 for n in numbers])
+                assert len(numbers) == 6
+
+    def test_sets_etc(self):
+        base_set = set(range(10))
+        print(base_set)
+        extended_set = base_set.union(range(8, 13))
+        assert len(extended_set) == 13
+        print(extended_set)
+        reduced_set = extended_set.difference(range(6, 9))
+        assert len(reduced_set) == 10
+        assert 9 in reduced_set
+        assert 6 not in reduced_set
+        print(reduced_set)
+        print(main.day_22_create_cuboid([10, 11] * 3))
+
+    def tst_part_one(self):
+        assert main.day_22_part_one(self.example_text) == 39
+        assert main.day_22_part_one(self.larger_example) == 590784
+        solution = main.day_22_part_one(Puzzle(22).get_text_input())
+        print(f'Solution to Part One is {solution}')
+        assert solution == 611176
+
+    # TODO: Part Two
+    # functions exist for: size of cuboid, do two cuboids overlap?, size of overlap
+    # Traverse the list of instructions, keeping a running total of 'on' elements:
+    # 1. Find all previously-considered cuboids that it overlaps
+    # 2. for an 'on' instruction, add size of cuboid minus sizes of any overlaps
+    #       with previous 'on' cuboids.  Ignore overlaps with 'off's?
+    # 3. for an 'off' instruction, subtract sizes of any overlaps with 'on' cuboids
+    #       already encountered, add for overlaps with previous 'off' cuboids, but
+    #       ONLY WHERE THEY OVERLAP with previous 'on' cuboids
+    # Looking at overlapping cuboids must be done in the order in which they were
+    #   encountered
+    # Need a function to return all previously-encountered overlapping cuboids
+
+    def tst_part_two_functions(self):
+        assert main.day_22_get_cuboid_size([1, 1, 1, 1, 1, 1]) == 1
+        assert main.day_22_get_cuboid_size([-9, 10, -9, 10, -9, 10]) == 8000
+        assert main.day_22_calc_overlap_size([1, 1, 1, 1, 1, 1],
+                                             [-9, 10, -9, 10, -9, 10]) == 1
+        assert main.day_22_calc_overlap_size([-9, -89765, -10, -89765, -9, -89765],
+                                             [-9, 10, -9, 10, -9, 10]) == 0
+        overlap_count = 0
+        data = main.day_22_load_data(Puzzle(22).get_text_input(), all_space=True)
+        for i, row in enumerate(data):
+            this_cuboid = row[1]
+            local_overlaps = []
+            for j, other_row in enumerate(data):
+                if j == i:
+                    continue
+                if main.day_22_calc_overlap_size(this_cuboid, other_row[1]) > 0:
+                    local_overlaps.append(j)
+                    overlap_count += 1
+            # print(f'Cuboid {i} overlaps with: {len(local_overlaps)} cuboids')
+        assert overlap_count == 3868
+
+    def test_part_two_solves_part_one(self):
+        data = main.day_22_load_data(self.example_text)
+        assert main.day_22_solve_part_two(data) == 39
+        bigger_data = main.day_22_load_data(self.larger_example)
+        assert main.day_22_solve_part_two(bigger_data) == 590784
+
+    def test_part_two(self):
+        assert main.day_22_part_two(self.larger_example) == 2758514936282235
+        # text = Puzzle(22).get_text_input()
+
+
+class TestDayTwentyOne:
+    example_input = """Player 1 starting position: 4
+Player 2 starting position: 8"""
+
+    def test_init(self):
+        start_spots = tuple(main.day_21_load_data(self.example_input))
+        assert start_spots == (4, 8)
+        assert main.day_21_part_one(start_spots) == 739785
+
+    def test_cycle(self):
+        my_cycle = itertools.cycle([*range(1, 101)])
+        n = 0
+        while n < 100:
+            dice_roll = [next(my_cycle) for _ in range(3)]
+            # print(dice_roll)
+            n = dice_roll[1]
+
+    def test_part_one(self):
+        text = Puzzle(21).get_text_input().strip('\n')
+        solution = main.day_21_part_one(main.day_21_load_data(text))
+        print(f'Part One solution is {solution}')
+        assert solution == 678468
+
+    # TODO: Part Two
+    #   consider all possible journeys to 21 points (min. three turns)
+    #    . . .  but it could take longer than three turns
+    #   i.e. getting all valid sequences of dice totals
+    #   each turn, there are 27 possible totals, ranging from 3 to 9
+    #   player actions are totally independent of each other, so for each
+    #   universe relating to one player's moves, all universes relating to the other
+    #   player's moves need to be taken into account
+    #   Only consider universes that end in a win for either player
+
+    # Possible solution:
+    #   1. get starting position
+    #   Loop:
+    #       2. 3 dice rolls could advance by any number in range 3-9
+    #       3. advance position by each of these numbers
+    #       4. increase score by new position
+    #       5. record each of the 3-dice totals as a route
+    #       5a.  . . . with current position/score pair
+    # or can I use recursion?
+
+    # when this list is complete, get the product of no. of permutations
+    # of three dice that can get each number in each step of each item in the list
+
+    #   have a list of routes under investigation and move to a completed list
+    #   once 21 is reached?
+
+    # player 1 / player 2: player 2 only wins in universes where they reach 21
+    # without player 1 doing so.  The number of winning universes is complete
+    # universes multiplied by player 1 non-winning universes evaluated up to the
+    # number of turns player 2 has taken.  i.e. all universes of greater length
+    # than number of turns, calculated up to player 2 turns
+
+    # for player 1, it's winning universes multiplied by all player 2
+    # universes of length > p1 turns - 1, evaluated up to p1 turns - 1
+
+    # TODO: curtailing lists of universes -> duplication
+
+    # think the no. of turns required can be anything from 3 to 9 (9 for player one only)
+
+    def test_combinations(self):
+        score_abundances = main.day_21_get_number_of_combinations_per_total()
+        assert len(score_abundances) == 7
+        assert sum(score_abundances.values()) == 27
+
+    def test_roll_sequence_scoring(self):
+        assert main.day_21_score_roll_sequence([1], 1) == 2
+        assert main.day_21_score_roll_sequence([1], 10) == 1
+        assert main.day_21_score_roll_sequence([1], 9) == 10
+        assert main.day_21_score_roll_sequence([2, 9, 3], 8) == 21
+        assert main.day_21_score_roll_sequence([3, 7, 3, 7, 3, 7, 3, 7, 3], 1) == 24
+        assert main.day_21_score_roll_sequence([3, 3, 4, 3], 5) == 22
+        # for start_pos in range(1, 11):
+        #     all_routes = main.day_21_find_all_routes_to_21(start_pos)
+        #     assert all([main.day_21_score_roll_sequence(s, start_pos) < 31 for s in all_routes])
+
+    def test_routes_to_21(self):
+        routes = main.day_21_find_all_routes_to_21(7)
+        print(f'There are {len(routes)} routes to 21 from 7:')
+        print(f'longest route is {max([len(r) for r in routes])}')
+
+    def test_part_two(self):
+        abundances = main.day_21_get_number_of_combinations_per_total()
+        print(abundances)
+        assert main.day_21_calc_universes_for_route([3, 3], abundances) == 1
+        assert main.day_21_calc_universes_for_route([9] * 99, abundances) == 1
+        assert main.day_21_calc_universes_for_route([6, 7, 8, 3], abundances) == 126
+        assert main.day_21_part_two(self.example_input) == 444356092776315
+        solution = main.day_21_part_two(Puzzle(21).get_text_input().strip('\n'))
+        print(f'Solution to Part Two is {solution}')
+        assert solution == 131180774190079
+
+
+class TestDayTwenty:
+    example_input = """..#.#..#####.#.#.#.###.##.....###.##.#..###.####..#####..#....#..#..##..##
+#..######.###...####..#..#####..##..#.#####...##.#.#..#.##..#.#......#.###
+.######.###.####...#.##.##..#..#..#####.....#.#....###..#.##......#.....#.
+.#..#..##..#...##.######.####.####.#.#...#.......#..#.#.#...####.##.#.....
+.#..#...##.#.##..#...##.#.##..###.#......#.#.......#.#.#.####.###.##...#..
+...####.#..#..#.##.#....##..#.####....##...##..#...#......#.#.......#.....
+..##..####..#...#.#.#...##..#.#..###..#####........#..####......#..#
+
+#..#.
+#....
+##..#
+..#..
+..###"""
+
+    def test_init(self):
+        algorithm, image = main.day_20_load_data(Puzzle.convert_input(self.example_input, None))
+        assert len(algorithm) == 512
+        assert image[3][4] == '.'
+
+    def test_image_resize(self):
+        image = ['#']
+        new_image = main.day_20_resize_image(image)
+        assert new_image == ['.....', '.....', '..#..', '.....', '.....']
+        assert main.day_20_resize_image(new_image) == new_image
+        bigger_image = ['.#', '#.']
+        next_image = main.day_20_resize_image(bigger_image)
+        assert len(next_image) == 6
+        assert all([len(row) == 6 for row in next_image])
+        assert next_image[2][3] == next_image[3][2] == '#'
+        assert main.day_20_resize_image(next_image) == next_image
+
+    def test_image_conversion(self):
+        grid = main.day_20_resize_image(['#'])
+        assert main.day_20_get_surrounding_string(main.Point(1, 2), grid) == '.....#...'
+        algo, _ = main.day_20_load_data(Puzzle.convert_input(self.example_input, None))
+        print('\n'.join(main.day_20_process_image(grid, algo)))
+
+    def test_part_one(self):
+        raw_data = Puzzle.convert_input(self.example_input, None)
+        assert main.day_20_part_one(raw_data) == 35
+        expected_image = """.......#.
+.#..#.#..
+#.#...###
+#...##.#.
+#.....#.#
+.#.#####.
+..#.#####
+...##.##.
+....###.."""
+        algo, img = main.day_20_load_data(raw_data)
+        for _ in range(2):
+            img = main.day_20_resize_image(img)
+            img = main.day_20_process_image(img, algo)
+        assert '\n'.join(img) == expected_image
+
+        p1_data = Puzzle(20).input_as_list(None)
+        alg, im = main.day_20_load_data(p1_data)
+        assert len(alg) == 512
+        assert len(im) == 100
+        assert all([len(row) == 100 for row in im])
+        solution = main.day_20_part_one(p1_data)
+        print(f'Part One solution is {solution}')
+        assert solution < 5431
+
+
+class TestDayNineteen:
+    # TODO:
+    # 1. find a scheme to represent the 24 orientations (eg. +x-y, -z+x . . . )
+    # 2. find a way to create a function that maps numbers in one set of co-ordinates to another
+    #   or just manually create a dictionary of transformation per orientation
+    # 3. set a scanner as having universal co-ordinates
+    # 4. for all other scanners, run their numbers through each of the 24 conversion functions
+    #   and see if there's one that gives at least 12 matches
+    #   - match means there is a constant offset in each of the three dimensions
+    # 5. while going along, maintain a growing list of beacon positions in universal co-ords
+
+    # Consider a point (1, 2, 3) in universal co-ordinates, where +z is up, +x right, +y forwards:
+    # Keeping z pointing up, rotating around four possible facings, this looks like:
+    # +y:   (1, 2, 3)       = (x, y, z)
+    # +x:   (-2, 1, 3)      = (-y, x, z) to convert back
+    # -y:   (-1, -2, 3)     = (-x, -y, z)
+    # -x:   (2, -1, 3)      = (y, -x, z)
+    # Switching to -z pointing up (i.e. upside-down, mirror-image of above):
+    #   NB. Facings are in YOUR WORLD, not universal co-ordinates
+    # +y:   (-1, 2, -3)     = (-x, y, -z)
+    # +x:   (-2, -1, -3)    = (-y, -x, -z)
+    # -y:   (1, -2, -3)     = (x, -y, -z)
+    # -x:   (2, 1, -3)      = (y, x, -z)
+    # Switching to +x pointing up: +y remains straight ahead; +z is pointing left
+    # +y:   (3, 2, -1)      = (-z, y, x)
+    # +x:   (-2, 3, -1)     = (-z, -x, y)
+    # -y:   (-3, -2, -1)      = (-z, -y, -x)
+    # -x:   (2, -3, -1)       = (-z, x, -y)
+    # Flipping so -x points up: +y remains straight ahead; +z becomes right
+    # +y:   (-3, 2, 1)      = (z, y, -x)
+    # +x:   (-2, -3, 1)     = (z, -x, -y)
+    # -y:   (3, -2, 1)      = (z, -y, x)
+    # -x:   (2, 3, 1)       = (z, x, y)
+    # Switching to +y pointing up: +x remains right, +z behind
+    # +y:   (1, 3, -2)      = (x, -z, y)
+    # +x:   (-3, 1, -2)     = (y, -z, -x)
+    # -y:   (-1, -3, -2)    = (-x, -z, -y)
+    # -x:   (3, -1, -2)     = (-y, -z, x)
+    # Flipping, so -y points up: +x remains to right, +z in front
+    # +y:   (1, -3, 2)      = (x, z, -y)
+    # +x:   (3, 1, 2)     = (y, z, x)
+    # -y:   (-1, 3, 2)    = (-x, z, y)
+    # -x:   (-3, -1, 2)     = (-y, z, -x)
+
+    transforms = ["(x, y, z)", "(-y, x, z)", "(-x, -y, z)", "(y, -x, z)",
+                  "(-x, y, -z)", "(-y, -x, -z)", "(x, -y, -z)", "(y, x, -z)",
+                  "(-z, y, x)", "(-z, -x, y)", "(-z, -y, -x)", "(-z, x, -y)",
+                  "(z, y, -x)", "(z, -x, -y)", "(z, -y, x)", "(z, x, y)",
+                  "(x, -z, y)", "(y, -z, -x)", "(-x, -z, -y)", "(-y, -z, x)",
+                  "(x, z, -y)", "(y, z, x)", "(-x, z, y)", "(-y, z, -x)"]
+
+    five_scanners = """--- scanner 0 ---
+-1,-1,1
+-2,-2,2
+-3,-3,3
+-2,-3,1
+5,6,-4
+8,0,7
+
+--- scanner 0 ---
+1,-1,1
+2,-2,2
+3,-3,3
+2,-1,3
+-5,4,-6
+-8,-7,0
+
+--- scanner 0 ---
+-1,-1,-1
+-2,-2,-2
+-3,-3,-3
+-1,-3,-2
+4,6,5
+-7,0,8
+
+--- scanner 0 ---
+1,1,-1
+2,2,-2
+3,3,-3
+1,3,-2
+-4,-6,5
+7,0,8
+
+--- scanner 0 ---
+1,1,1
+2,2,2
+3,3,3
+3,1,2
+-6,-4,-5
+0,7,-8"""
+
+    def test_five_scanner_example(self):
+        lines = Puzzle.convert_input(self.five_scanners, None)
+        observations = main.day_19_load_scanner_data(lines)
+        assert len(observations) == 5
+        assert all([len(data) == 6 for _, data in observations.items()])
+
+        sc_0_points = observations[0]
+        for scanner in [sc_points for sc_id, sc_points in observations.items() if sc_id > 0]:
+            for tr in self.transforms:
+                transformed_points = [main.day_19_do_transformation(pt, tr) for pt in scanner]
+                if all([tp == op for tp, op in zip(transformed_points, sc_0_points)]):
+                    print(f'There is a match! Overlapping points: {transformed_points}')
+                    break
+
+    def test_co_ordinate_transformations(self):
+        test_grid = [[[0 if (x == y == layer == 0) else False for x in range(5)]
+                      for y in range(5)]
+                     for layer in range(5)]
+        test_grid[3][2][1] = True
+
+        new_x, new_y, new_z = main.day_19_do_transformation((3, -2, 1), "(z, -y, x)")
+        assert test_grid[new_z][new_y][new_x]
+        assert len(self.transforms) == len(set(self.transforms)) == 24
+        transformed_points = []
+        for tr in self.transforms:
+            new_point = main.day_19_do_transformation((1,2,3), tr)
+            transformed_points.append(new_point)
+            # print(new_point)
+        assert len(set(transformed_points)) == 24
+
+    def test_play_around(self):
+        axes, directions = ("z", "y", "x"), ("+", "-")
+        facings = itertools.product(directions, axes, repeat=1)
+        all_orientations = []
+        for f in facings:
+            _, fac_ax = f
+            available_axes = filter(lambda a: a != fac_ax, axes)
+            orientations = [f + pr for pr in itertools.product(directions, available_axes)]
+            # print(["".join([*o]) for o in orientations])
+            all_orientations += ["".join([*o]) for o in orientations]
+        # print(all_orientations)
+        assert len(all_orientations) == 24
+        assert len(set(all_orientations)) == len(all_orientations)
+
+    # def test_part_one(self):
+    #     raw_eg = Puzzle.convert_input(Puzzle(19).get_text_from_filename("example19"), None)
+    #     assert main.day_19_part_one(raw_eg) == 79
+    #     # RUN-TIME 459.04s (0:07:39):
+    #     p1_data = Puzzle(19).input_as_list(None)
+    #     solution = main.day_19_part_one(p1_data)
+    #     print(f'Part One solution is {solution}')
+    #     assert solution == 306
+
+    def test_manhattan_distance(self):
+        point_1, point_2 = (main.Point3(*p) for p in ((1105, -1205, 1229), (-92, -2380, -20)))
+        assert main.day_19_manhattan_distance(point_1, point_2) == 3621
+        assert main.day_19_manhattan_distance(point_2, point_1) == 3621
+        assert main.day_19_manhattan_distance(point_1, point_1) == 0
+
+    def test_part_two(self):
+        raw_eg = Puzzle.convert_input(Puzzle(19).get_text_from_filename("example19"), None)
+        assert main.day_19_part_two(raw_eg) == 3621
+        p2_data = Puzzle(19).input_as_list(None)
+        solution = main.day_19_part_two(p2_data)
+        print(f'Part Two solution is {solution}')
 
 
 class TestDayEighteen:
@@ -24,6 +454,7 @@ class TestDayEighteen:
         assert main.day_18_split_expression("[9,1]") == ("9", "1")
         assert main.day_18_split_expression("[[1,2],3]") == ("[1,2]", "3")
         assert main.day_18_split_expression("[9,[8,7]]") == ("9", "[8,7]")
+        assert main.day_18_split_expression("[10,20]") == ("10", "20")
         assert main.day_18_magnitude("[9,1]") == 29
         input_result_pairs = {}
         for text_row in Puzzle.convert_input(self.magnitude_examples, None):
@@ -34,6 +465,15 @@ class TestDayEighteen:
             assert k.count('[') == k.count(']')
             assert main.day_18_magnitude(k) == input_result_pairs[k]
         print(input_result_pairs)
+
+    def test_get_number_positions(self):
+        assert main.day_18_get_number_positions("[2,]") == {1: 2}
+        assert main.day_18_get_number_positions("[2,3]") == {1: 2, 3: 3}
+        assert main.day_18_get_number_positions("[7,[6,[5,[4,[3,2]]]]]") == \
+               {1: 7, 4: 6, 7: 5, 10: 4, 13: 3, 15: 2}
+        assert main.day_18_get_number_positions("[11,2]") == {1: 11, 4: 2}
+        assert main.day_18_get_number_positions("[[[[0,7],4],[15,[0,13]]],[1,1]]") == \
+               {4: 0, 6: 7, 9: 4, 13: 15, 17: 0, 19: 13, 26: 1, 28: 1}
 
     def test_explosions(self):
         examples = {
@@ -90,7 +530,23 @@ class TestDayEighteen:
 [[[5,[7,4]],7],1]
 [[[[4,2],2],6],[8,7]]"""
         sle_list = Puzzle.convert_input(slightly_larger_eg, None)
-        main.day_18_cumulative_addition(sle_list)
+        assert main.day_18_cumulative_addition(sle_list) == \
+               "[[[[8,7],[7,7]],[[8,6],[7,7]]],[[[0,7],[6,6]],[8,7]]]"
+
+    def test_part_one(self):
+        example_list = Puzzle.convert_input(self.example_homework, None)
+        assert main.day_18_part_one(example_list) == 4140
+        p1_list = Puzzle(18).input_as_list(None)
+        solution = main.day_18_part_one(p1_list)
+        print(f'Part One solution = {solution}')
+        assert solution == 3654
+
+    def test_part_two(self):
+        example_list = Puzzle.convert_input(self.example_homework, None)
+        assert main.day_18_part_two(example_list) == 3993
+        p2_list = Puzzle(18).input_as_list(None)
+        p2_solution = main.day_18_part_two(p2_list)
+        print(f'Part Two solution = {p2_solution}')
 
 
 class TestDaySeventeen:
@@ -223,9 +679,6 @@ class TestDaySixteen:
         assert solution
 
 
-
-
-
 class TestDayFifteen:
     example_input = """1163751742
 1381373672
@@ -257,8 +710,9 @@ class TestDayFifteen:
 
     def test_part_one(self):
         example_grid = main.day_9_load_data(self.example_input)
-        main.day_15_part_one(example_grid)
-
+        for _ in range(20):
+            solution = min([main.day_15_part_one(example_grid) for _ in range(20)])
+            print(f'Lowest path risk sum is {solution}')
 
 
 class TestDayFourteen:
