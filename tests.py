@@ -3,6 +3,432 @@ import main
 import itertools
 
 
+class TestDayTwentyFour:
+    eg_1 = """inp x
+mul x -1"""
+    eg_2 = """inp z
+inp x
+mul z 3
+eql z x"""
+    eg_3 = """inp w
+add z w
+mod z 2
+div w 2
+add y w
+mod y 2
+div w 2
+add x w
+mod x 2
+div w 2
+mod w 2"""
+    div_z_26 = [False] * 4 + [True, False, False, True, False] + [True] * 5
+
+    def test_init(self):
+        state = {chr(o): 0 for o in range(ord("w"), ord("w") + 4)}
+        for line in self.eg_1.split('\n'):
+            if 'inp' in line:
+                line += " 1"
+            state = main.day_24_process_one_line(state, line)
+        assert state["x"] == -1
+
+    def test_running_programs(self):
+        program = Puzzle.convert_input(self.eg_1 + '\n')
+        for n in range(100):
+            output = main.day_24_run_program(program, (n,))
+            assert output["x"] == -n
+            assert sum([*output.values()]) == -n
+            assert sum([v == 0 for v in output.values()]) == 3 if n > 0 else 4
+        two_args_program = Puzzle.convert_input(self.eg_2, None)
+        output = main.day_24_run_program(two_args_program, (3, 9))
+        assert output["z"] == 1
+        output = main.day_24_run_program(two_args_program, (-113, -339))
+        assert output["z"]
+        output = main.day_24_run_program(two_args_program, (50, 13))
+        assert output["z"] == 0
+        binary_convertor = Puzzle.convert_input(self.eg_3, None)
+        result = main.day_24_run_program(binary_convertor, (15,))
+        assert all([v == 1 for v in result.values()])
+        for num in range(16):
+            binary_values = main.day_24_run_program(binary_convertor, (num,))
+            assert main.binary_to_int([*binary_values.values()]) == num
+
+    def test_monad_run(self):
+        arg_string = "17" * 7
+        args = (int(ch) for ch in arg_string)
+        monad = Puzzle(24).input_as_list(None)
+        print(f'{" " * 4}{"*" * 20}')
+        print(f'Running monad program:')
+        validity = main.day_24_run_program(monad, args)
+        print(f'Example number gives validity of {validity}')
+
+    def test_fucking_about(self):
+        print('\n')
+        monad = Puzzle(24).input_as_list(None)
+        unique_ops, unique_var, unique_args = set(), set(), set()
+        for i, line in enumerate(monad[::18]):
+            operation_sequence = " ".join([monad[(18 * i) + n][:3] for n in range(18)])
+            print(operation_sequence)
+            variable_sequence = " ".join([f"{monad[(18 * i) + n][4]:>3}" for n in range(18)])
+            print(variable_sequence)
+            argument_sequence = " ".join([f"{monad[(18 * i) + n][6:]:>3}" for n in range(18)])
+            print(argument_sequence)
+            unique_ops.add(operation_sequence)
+            unique_var.add(variable_sequence)
+            unique_args.add(argument_sequence)
+        assert len(unique_ops) == len(unique_var) == 1
+        example_num = "13579246899999"
+        for x in range(100):
+            last_digits = f'{x}'
+            if len(last_digits) == 2 and "0" not in last_digits:
+                candidate = f'{example_num[:12]}{last_digits}'
+                final_z = main.day_24_run_program(monad, candidate)["z"]
+                # print(final_z)
+                if not final_z:
+                    print(f'{candidate} IS VALID!')
+        for z in range(962, 962 + 26):
+            print(f'** INITIAL z: {z}')
+            for n in range(1, 10):
+                valid = self.validity_predictor(f'{n}21', initial_z=z)
+                if valid:
+                    print(f'{str(n)}21 is valid model number fragment')
+                    assert self.model_no_fragment_is_valid(f'{n}21', initial_z=z)
+                else:
+                    assert not self.model_no_fragment_is_valid(f'{n}21', initial_z=z)
+    # prevalence of valid model numbers is not even 1 in 10,000
+
+        """OPERATIONS:
+        w: always takes input, not touched until input step on next round
+        x: (z -> x), mod 26, add random no. (-7 to 15), != w
+        y: -> 25, mul x, +1, -> w (after mul z y), add random (1 to 15), mul x
+        z: (div 26 or unch.), mul y, add y (last step) """
+
+    @staticmethod
+    def model_no_fragment_is_valid(model_number: str, initial_z: int=0) -> bool:
+        print(f"Testing {model_number}, z={initial_z}")
+        assert "0" not in model_number
+        monad_prog = Puzzle(24).input_as_list(None)
+        final_state = main.day_24_run_program(monad_prog[-18 * len(model_number):],
+                                              model_number, initial_z)
+        return final_state["z"] == 0
+
+    def test_reverse_engineering_approach(self):
+        """Start with final state, with z=0.  Get list of inputs into the
+        final step that would get to z=0
+        For each of those inputs, there will be a (infinite?) range
+        of possible z's, which can be expressed as a generator.
+        As we work backwards, there will be a growing list of model number
+        fragments, each with its own generator to express the initial possible z's
+        at the start of the furthest-back step
+        TODO: what do you need to know at start of each step: w and z?"""
+        last_step_results = self.reverse_step()
+        print(f'After processing last step: {last_step_results}')
+        for input_num, gen in last_step_results:
+            z_value = next(gen)
+            assert self.model_no_fragment_is_valid(str(input_num), z_value)
+            print(f'input number: {input_num} -> z: {z_value}')
+        second_last_step = self.reverse_step(final_z=9, step_no=12)
+        for input_num, gen in second_last_step:
+            # for _ in range(5):
+            #     assert self.model_no_fragment_is_valid(str(input_num), next(gen))
+            print(f'input number: {input_num} -> z: {[next(gen) for _ in range(1)]}')
+
+    def test_go_back_two_steps(self):
+        print('\n*** TWO-STEP process')
+        valid_items = []
+        end_step_results = self.reverse_step()
+        for end_digit, z_gen in end_step_results:
+            # print(end_digit, [z for z in z_gen])
+            for z in z_gen:
+                second_last_step = self.reverse_step(final_z=z, step_no=12)
+                for dgt, gen in second_last_step:
+                    for z_g in gen:
+                        third_last_step = self.reverse_step(final_z=z_g, step_no=11)
+                        for dgt_3, zg_3 in third_last_step:
+                #     print(dgt, [g for g in gen])
+                            valid_items.append((int(f"{dgt_3}{dgt}{end_digit}"), next(zg_3)))
+        for vi in valid_items:
+            print(f"{vi}")
+            three_digits, init_z = vi
+            assert self.model_no_fragment_is_valid(f"{three_digits}", init_z)
+        assert len(valid_items) == 729
+
+    def reverse_step(self, final_z: int=0, step_no: int=13) -> [(int, int)]:
+        valid_w_z_combos = []
+        x_increment = main.day_24_add_to_x[step_no]
+        y_increment = main.day_24_add_to_y[step_no]
+        w_range = range(1, 10)
+        for w in w_range:
+            # z_generator = itertools.count(26 + w - x_increment, 26)
+            initial_z = (26 * final_z) + w - x_increment
+            z_generator = iter(range(initial_z, initial_z + 1))
+            valid_w_z_combos.append((w, z_generator))
+        return valid_w_z_combos
+
+    @staticmethod
+    def process_readable_step(state: dict, digit: int, x_incr: int, y_incr: int) -> dict:
+        initial_z = state["z"]
+        w = digit
+        x, y, z = TestDayTwentyFour.readable_step(initial_z, digit, x_incr, y_incr)
+        for var in "wxyz":
+            state[var] = eval(var)
+        return state
+
+    @staticmethod
+    def readable_step(z: int, digit: int, x_incr: int, y_incr: int) -> (int, ):
+        x = (digit - x_incr) != z % 26
+        if x_incr <= 0:
+            z //= 26
+        if x:
+            y = 26
+            z *= y
+            y = (digit + y_incr) * x
+            z += y
+        else:
+            y = 0   # does this make any difference?
+        return x, y, z
+
+    def test_one_off(self):
+        assert self.model_no_fragment_is_valid("99", 252)
+
+    def validity_predictor(self, model_number: str, initial_z: int=0) -> bool:
+        state = main.day_24_run_program([], "")
+        state["z"] = initial_z
+        for mn_digit, div_z, x_incr, y_incr in zip(model_number,
+                                                   self.div_z_26[-len(model_number):],
+                                                   main.day_24_add_to_x[-len(model_number):],
+                                                   main.day_24_add_to_y[-len(model_number):]):
+            number = int(mn_digit)
+            # state["w"] = number
+            # state["x"] = ((state["z"] % 26) + x_incr) != number
+            # # left side of != could go negative, but "x" limited to 0 or 1
+            # state["y"] = (25 * state["x"]) + 1
+            # if div_z:
+            #     state["z"] = state["z"] // 26
+            #     # div_z only True when add_to_x <= 0
+            # # at this point, y can only be 1 or 26
+            # state["z"] *= state["y"]
+            # state["y"] = (number + y_incr) * state["x"]
+            # # y never goes negative
+            # state["z"] += state["y"]
+            state = self.process_readable_step(state, number, x_incr, y_incr)
+        # print(state)
+        monad_prog = Puzzle(24).input_as_list(None)
+        expected = main.day_24_run_program(monad_prog[-18 * len(model_number):],
+                                           model_number, initial_z)
+        # print(expected)
+        assert state == expected
+        # assert self.model_no_fragment_is_valid(model_number)
+        return state["z"] == 0
+
+    def tst_part_one(self):
+        main.day_24_part_one()
+
+    # To get final z = 0:   (x=0, y=0, z<26 always -> final z=0 if div_z)
+    #   last digit == prev. z (would be prev. z + x_incr but x_incr = 0 here)
+    #   there is no x=1 solution
+    # LAST DIGIT could be 1-9.  Initial z of last step = last digit
+    # Second-last digit would have to be:
+    #   how to get a z that's anywhere between 1 and 9?
+    #   36 < z < 46 and number=z-35, e.g. 36, 1 -> z=1.  Always -> z=1.
+    #   also 62 < z < 72, number=z-61 -> z=number, etc. . . .
+    # Third-last digit:
+    #   942 < z < 952, number=z-941 -> z=36, etc.
+
+    def tst_silly(self):
+        """doesn't get anywhere in a reasonable time"""
+        for x in range(int("9" * 14), int("1" * 14), -1):
+            if "0" not in f"{x}":
+                if not (x % 3827):
+                    print(f'Got to: {x}')
+                if self.model_no_fragment_is_valid(f"{x}"):
+                    print(f"{x} is valid!")
+                    break
+
+    def test_individual_model_number_validity(self):
+        candidate = "99991991911111"
+        validity = self.model_no_fragment_is_valid(candidate)
+        print(f'{candidate} is {"VALID" if validity else "not valid"}')
+        assert not validity
+
+
+class TestDayTwentyThree:
+    example_text = """#############
+#...........#
+###B#C#B#D###
+  #A#D#C#A#
+  #########
+"""
+    part_two_additional_text = """  #D#C#B#A#
+  #D#B#A#C#"""
+
+    def test_init(self):
+        initial_config = main.day_23_load_data(self.example_text)
+        print(initial_config)
+        assert main.day_23_is_completed(main.Configuration('...........',
+                                                           ["AA", "BB", "CC", "DD"]))
+
+    def test_part_one_functions(self):
+        initial_config = main.day_23_load_data(self.example_text)
+        assert initial_config == main.Configuration("." * 11, ['AB', 'DC', 'CB', 'AD'])
+        assert len(main.day_23_get_next_valid_moves(initial_config)) == 28
+        next_config = main.day_23_make_move(initial_config, (6, 3))
+        assert next_config == \
+               main.Configuration("...B.......", ["AB", "DC", "C", "AD"])
+        assert main.day_23_get_energy_usage((6, 3), next_config) == 40
+        valid_next_moves = main.day_23_get_next_valid_moves(next_config)
+        assert main.Move(4, 6) in valid_next_moves
+        assert len(valid_next_moves) == 11
+        next_config = main.day_23_make_move(next_config, (4, 6))
+        assert next_config == \
+               main.Configuration("...B.......", ["AB", "D", "CC", "AD"])
+        assert main.day_23_get_energy_usage((4, 6), next_config) == 400
+        valid_next_moves = main.day_23_get_next_valid_moves(next_config)
+        assert len(valid_next_moves) == 10
+        next_config = main.day_23_make_move(next_config, (4, 5))
+        assert next_config == \
+               main.Configuration("...B.D.....", ["AB", "", "CC", "AD"])
+        assert main.day_23_get_energy_usage((4, 5), next_config) == 3000
+        assert len(main.day_23_get_next_valid_moves(next_config)) == 6
+        next_config = main.day_23_make_move(next_config, (3, 4))
+        assert next_config == \
+               main.Configuration(".....D.....", ["AB", "B", "CC", "AD"])
+        assert main.day_23_get_energy_usage((3, 4), next_config) == 30
+        next_config = main.day_23_make_move(next_config, (2, 4))
+        assert next_config == \
+               main.Configuration(".....D.....", ["A", "BB", "CC", "AD"])
+        next_config = main.day_23_make_move(next_config, (8, 7))
+        assert main.day_23_get_energy_usage((8, 7), next_config) == 2000
+        next_config = main.day_23_make_move(next_config, (8, 9))
+        assert main.day_23_get_energy_usage((8, 9), next_config) == 3
+        assert next_config == \
+               main.Configuration(".....D.D.A.", ["A", "BB", "CC", ""])
+        next_config = main.day_23_make_move(next_config, (7, 8))
+        assert main.day_23_get_energy_usage((7, 8), next_config) == 3000
+        next_config = main.day_23_make_move(next_config, (5, 8))
+        assert main.day_23_get_energy_usage((5, 8), next_config) == 4000
+        assert next_config == \
+               main.Configuration(".........A.", ["A", "BB", "CC", "DD"])
+        next_config = main.day_23_make_move(next_config, (9, 2))
+        assert main.day_23_is_completed(next_config)
+        assert main.day_23_get_energy_usage((9, 2), next_config) == 8
+
+    def test_no_move_out_of_empty_room(self):
+        config = main.day_23_load_data(self.example_text)
+        config = main.day_23_make_move(config, (2, 9))
+        config = main.day_23_make_move(config, (2, 10))
+        assert len(main.day_23_get_next_valid_moves(config)) == 15
+
+    def test_stalled_configuration(self):
+        config = main.day_23_load_data(self.example_text)
+        config = main.day_23_make_move(config, (4, 1))
+        config = main.day_23_make_move(config, (8, 3))
+        config = main.day_23_make_move(config, (2, 9))
+        config = main.day_23_make_move(config, (6, 7))
+        config = main.day_23_make_move(config, (4, 5))
+        print(config)
+        assert main.day_23_get_next_valid_moves(config) == []
+        oo_config = main.Day23Config(config)
+        assert oo_config.generate_next_configs() == []
+        assert oo_config.stalled
+        stalls_in_3 = main.day_23_load_data(self.example_text)
+        stalls_in_3 = main.day_23_make_move(stalls_in_3, (2, 3))
+        stalls_in_3 = main.day_23_make_move(stalls_in_3, (8, 5))
+        stalls_in_3 = main.day_23_make_move(stalls_in_3, (8, 7))
+        print(stalls_in_3)
+        assert main.day_23_get_next_valid_moves(stalls_in_3) == []
+        s_oo_cfg = main.Day23Config(stalls_in_3)
+        assert s_oo_cfg.generate_next_configs() == []
+        assert s_oo_cfg.stalled
+
+    def test_oo_approach(self):
+        initial_config = main.Day23Config(main.day_23_load_data(self.example_text))
+        next_configs = initial_config.generate_next_configs()
+        assert len(next_configs) == 28
+        d23_config = main.Day23Config.create_from_tuple(('...B.....C.A D CBAD', 28))
+        print(d23_config._config)
+        assert d23_config.energy_usage == 28
+        hallway, rooms = d23_config._config
+        assert hallway == '...B.....C.'
+        assert rooms == ["A", "D", "CB", "AD"]
+        d23_config = main.Day23Config.create_from_tuple(('.B.C.......A D CBAD', 28))
+        print(d23_config._config)
+        d23_config = main.Day23Config.create_from_tuple(('.....D.A...ABDCCB  ', 28))
+        print(d23_config._config)
+
+    def tst_part_one(self):
+        assert main.day_23_part_one(self.example_text) == 12521
+        # NB. Runtime: 04:25
+        main.day_23_minimum_energy = (2 ** 31) - 1
+        solution = main.day_23_part_one(Puzzle(23).get_text_input())
+        print(f'Part One solution is {solution}')
+        assert solution == 13066
+
+    def test_set_up_for_part_two(self):
+        new_rows = self.part_two_additional_text
+        modified_text = main.day_23_insert_additional_rows(self.example_text, new_rows)
+        assert modified_text == """#############
+#...........#
+###B#C#B#D###
+  #D#C#B#A#
+  #D#B#A#C#
+  #A#D#C#A#
+  #########
+"""
+        part_two_config = main.day_23_load_data(modified_text)
+        oo_config = main.Day23Config(part_two_config, room_size=4)
+        re_translated = main.Day23Config.create_from_tuple(oo_config.tuple_ise(), room_size=4)
+        assert re_translated._config == oo_config._config
+        moves = ((8, 10), (8, 0), (6, 9), (6, 7), (6, 1))
+        for mv in moves:
+            part_two_config = main.day_23_make_move(part_two_config, mv)
+        config = main.Day23Config(part_two_config, room_size=4)
+        cfg_tuple = config.tuple_ise()
+        assert main.Day23Config.create_from_tuple(cfg_tuple, 4)._config == config._config
+
+    def test_steps_for_part_two(self):
+        start_text = main.day_23_insert_additional_rows(self.example_text,
+                                                        self.part_two_additional_text)
+        initial_config = main.day_23_load_data(start_text)
+        next_moves = main.day_23_get_next_valid_moves(initial_config, room_size=4)
+        assert len(next_moves) == 28
+        config = main.day_23_make_move(initial_config, (8, 10))
+        assert main.day_23_get_energy_usage((8, 10), config, room_size=4) == 3000
+        next_moves = main.day_23_get_next_valid_moves(config, room_size=4)
+        assert len(next_moves) == 24
+        assert main.Move(8, 0) in next_moves
+        config = main.day_23_make_move(config, (8, 0))
+        assert main.day_23_get_energy_usage((8, 0), config, 4) == 10
+        config = main.day_23_make_move(config, (6, 9))
+        config = main.day_23_make_move(config, (6, 7))
+        config = main.day_23_make_move(config, (6, 1))
+        config = main.day_23_make_move(config, (4, 6))
+        assert main.day_23_get_energy_usage((4, 6), config, 4) == 600
+        next_config = initial_config
+        energy_used = 0
+        moves_to_completion = ((8, 10), (8, 0), (6, 9), (6, 7), (6, 1),
+                               (4, 6), (4, 6), (4, 5), (4, 3), (5, 4),
+                               (7, 4), (9, 4), (8, 6), (8, 9), (3, 8),
+                               (2, 4), (2, 8), (2, 3), (1, 2), (0, 2),
+                               (3, 8), (9, 2), (10, 8))
+        for move in moves_to_completion:
+            next_config = main.day_23_make_move(next_config, move)
+            energy_used += main.day_23_get_energy_usage(move, next_config, 4)
+        print(next_config)
+        assert main.day_23_is_completed(next_config, room_size=4)
+        assert energy_used == 44169
+
+    def test_part_two(self):
+        start_text = main.day_23_insert_additional_rows(self.example_text,
+                                                        self.part_two_additional_text)
+        # assert main.day_23_part_two(start_text) == 44169
+        p2_raw_text = Puzzle(23).get_text_input()
+        p2_full_text = main.day_23_insert_additional_rows(p2_raw_text,
+                                                          self.part_two_additional_text)
+        solution = main.day_23_part_two(p2_full_text)
+        print(f'Part Two solution is {solution}')
+        assert solution > 47328
+
+
 class TestDayTwentyTwo:
     example_text = """on x=10..12,y=10..12,z=10..12
 on x=11..13,y=11..13,z=11..13
@@ -80,8 +506,22 @@ on x=967..23432,y=45373..81175,z=27513..53682
     # Looking at overlapping cuboids must be done in the order in which they were
     #   encountered
     # Need a function to return all previously-encountered overlapping cuboids
+    #
+    # RECURSIVE SOLUTION?
+    #   Function gives all the overlaps(?) from a list of cuboids,
+    #       eventually working for whole list
+    #   End-case: one cuboid only, return its dimensions
+    #   Second cuboid: +2, -2:1
+    #   Third cuboid: +3, -3:1, -3:2, +3:2:1,
+    #   How about only counting the 2-cuboid overlaps?
+    #   Add a 4th cuboid to 1, 2, and 3, and you are ADDING ON:
+    #   +4, -4:1, -4:2, +4:2:1, -4:3, +4:3:1, +4:3:2. -4:3:2:1
+    #   So it's:
+    #   1. Add the size of the cuboid itself
+    #   2. Subtract any combinations of even-numbered length involving that cuboid
+    #   3. Add any combinations of odd-numbered length involving said cuboid
 
-    def tst_part_two_functions(self):
+    def test_part_two_functions(self):
         assert main.day_22_get_cuboid_size([1, 1, 1, 1, 1, 1]) == 1
         assert main.day_22_get_cuboid_size([-9, 10, -9, 10, -9, 10]) == 8000
         assert main.day_22_calc_overlap_size([1, 1, 1, 1, 1, 1],
@@ -101,14 +541,25 @@ on x=967..23432,y=45373..81175,z=27513..53682
                     overlap_count += 1
             # print(f'Cuboid {i} overlaps with: {len(local_overlaps)} cuboids')
         assert overlap_count == 3868
+        cuboid_list = [[-9, 10, -9, 10, -9, 10], [-9, 10, -9, 10, -9, 10], [1, 1, 1, 1, 1, 1], [-9, -89765, -10, -89765, -9, -89765]]
+        assert main.day_22_get_overlap_of_multiple_cuboids([("on", cbd)
+                                                            for cbd in cuboid_list]) \
+               == [0, -1]
+        assert main.day_22_get_cuboid_size([0, -1]) == 0
 
-    def test_part_two_solves_part_one(self):
+    def test_part_two_solution_solves_part_one(self):
         data = main.day_22_load_data(self.example_text)
-        assert main.day_22_solve_part_two(data) == 39
+        assert main.day_22_try_for_part_two(data[:1]) == 27
+        assert main.day_22_try_for_part_two(data[:2]) == 46
+        assert main.day_22_try_for_part_two(data[:2] + [data[-1]]) == 46
+        assert main.day_22_try_for_part_two(data[:3]) == 38
+        assert main.day_22_try_for_part_two(data) == 39 #(46 when only treating ons)
         bigger_data = main.day_22_load_data(self.larger_example)
         assert main.day_22_solve_part_two(bigger_data) == 590784
+        # just_out_of_interest = main.day_22_try_for_part_two(bigger_data)
+        # print(f'number is {just_out_of_interest}')
 
-    def test_part_two(self):
+    def tst_part_two(self):
         assert main.day_22_part_two(self.larger_example) == 2758514936282235
         # text = Puzzle(22).get_text_input()
 
@@ -228,23 +679,21 @@ class TestDayTwenty:
         assert len(algorithm) == 512
         assert image[3][4] == '.'
 
-    def test_image_resize(self):
-        image = ['#']
-        new_image = main.day_20_resize_image(image)
-        assert new_image == ['.....', '.....', '..#..', '.....', '.....']
-        assert main.day_20_resize_image(new_image) == new_image
-        bigger_image = ['.#', '#.']
-        next_image = main.day_20_resize_image(bigger_image)
-        assert len(next_image) == 6
-        assert all([len(row) == 6 for row in next_image])
-        assert next_image[2][3] == next_image[3][2] == '#'
-        assert main.day_20_resize_image(next_image) == next_image
+    def test_get_neighbouring_pixel_values(self):
+        algorithm, image = main.day_20_load_data(Puzzle.convert_input(self.example_input, None))
+        print('\n')
+        print('\n', image)
+        assert main.day_20_surrounding_pixels(main.Point(-3, -3), image) == '.' * 9
+        assert main.day_20_surrounding_pixels(main.Point(0, 0), image) == ('.' * 8) + '#'
+        assert main.day_20_surrounding_pixels(main.Point(100, 100), image) == '.' * 9
+        assert main.day_20_surrounding_pixels(main.Point(4, 3), image) == '.....##..'
 
     def test_image_conversion(self):
-        grid = main.day_20_resize_image(['#'])
-        assert main.day_20_get_surrounding_string(main.Point(1, 2), grid) == '.....#...'
-        algo, _ = main.day_20_load_data(Puzzle.convert_input(self.example_input, None))
-        print('\n'.join(main.day_20_process_image(grid, algo)))
+        algo, grid = main.day_20_load_data(Puzzle.convert_input(self.example_input, None))
+        new_image = main.day_20_process_image(grid, algo)
+        print('\n'.join(new_image))
+        new_image = main.day_20_process_image(new_image, algo)
+        print('\n'.join(new_image))
 
     def test_part_one(self):
         raw_data = Puzzle.convert_input(self.example_input, None)
@@ -260,7 +709,6 @@ class TestDayTwenty:
 ....###.."""
         algo, img = main.day_20_load_data(raw_data)
         for _ in range(2):
-            img = main.day_20_resize_image(img)
             img = main.day_20_process_image(img, algo)
         assert '\n'.join(img) == expected_image
 
@@ -271,7 +719,12 @@ class TestDayTwenty:
         assert all([len(row) == 100 for row in im])
         solution = main.day_20_part_one(p1_data)
         print(f'Part One solution is {solution}')
-        assert solution < 5431
+        assert solution == 5347
+
+    def test_part_two(self):
+        p2_data = Puzzle(20).input_as_list(None)
+        solution = main.day_20_part_two(p2_data)
+        print(f'Part Two solution is {solution}')
 
 
 class TestDayNineteen:

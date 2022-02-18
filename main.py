@@ -1,5 +1,5 @@
 from collections import namedtuple
-from itertools import product, permutations, combinations_with_replacement, cycle
+from itertools import product, permutations, combinations, cycle
 import random
 from math import prod as product
 
@@ -47,7 +47,265 @@ def invert_binary(binary: []) -> [bool]:
 
 # TODO: look at Barry's code
 # dataclasses
-def day_22_load_data(raw_input: str, all_space: bool = False) -> [(str,)]:
+day_24_add_to_x = [13, 15, 15, 11, -7, 10, 10, -5, 15, -3, 0, -5, -9, 0]
+day_24_add_to_y = [6, 7, 10, 2, 15, 8, 1, 10, 5, 3, 5, 11, 12, 10]
+
+
+class Day24StepperBacker:
+    def __init__(self, models_and_zs: [tuple]):
+        self.models_and_zs = models_and_zs
+
+    def step_back(self, step_no: int) -> object:
+        new_ms_and_zs = []
+        for model, z_gen in self.models_and_zs:
+            """do reverse step for each model/z combination"""
+        return Day24StepperBacker(new_ms_and_zs)
+
+
+def day_24_part_one():
+    sb = Day24StepperBacker([])
+    for step in range(13, -1, -1):
+        sb = sb.step_back(step)
+    return max(filter(lambda mz: next(mz[1]) == 0, sb.models_and_zs[0]),
+               key=lambda mzs: int(mzs[0]))
+
+
+def day_24_run_program(lines: [str], inputs: (int,),
+                       initial_z: int=0) -> {str: int}:
+    if isinstance(inputs, str):
+        inputs = (int(num) for num in inputs)
+    inputs = (ip for ip in inputs)
+    ord_w = ord("w")
+    memory_state = {chr(o): 0 for o in range(ord_w, ord_w + 4)}
+    memory_state["z"] = initial_z
+    for line in lines:
+        input_value = None
+        if line[:3] == "inp":
+            input_value = next(inputs)
+        memory_state = day_24_process_one_line(memory_state, line, input_value)
+    return memory_state
+
+
+def day_24_process_one_line(state: {str: int}, line: str,
+                            input_value = None) -> {str: int}:
+    instruction = line[:3]
+    target_var = line[4]
+    argument = line[6:]
+
+    def inp(var: str, arg: int):
+        state[var] = arg
+
+    def add(var: str, arg: int):
+        state[var] += arg
+
+    def mul(var: str, arg: int):
+        state[var] *= arg
+
+    def div(var: str, arg: int):
+        state[var] //= arg
+        state[var] += (1 if state[var] < 0 else 0)
+        
+    def mod(var: str, arg: int):
+        state[var] %= arg
+
+    def eql(var: str, arg: int):
+        state[var] = 1 if arg == state[var] else 0
+
+    if input_value or input_value == 0:
+        argument = input_value
+    elif any([a.isnumeric() for a in argument]):
+        argument = int(argument)
+    else:
+        argument = state[argument]
+    eval(f'{instruction}')(target_var, argument)
+    # print(f'{line:<10}{state}')
+    return state
+
+
+def day_23_load_data(raw_text: str) -> (str, [str]):
+    rows = Puzzle.convert_input(raw_text, None)
+    initial_hallway = "." * 11
+    initial_rooms = ["" for _ in range(4)]
+    for r in rows:
+        letters = "".join(filter(lambda ch: ch.isalpha(), r))
+        if letters:
+            initial_rooms = [ltr + initial_rooms[i] for i, ltr in enumerate(letters)]
+    return Configuration(initial_hallway, initial_rooms)
+
+
+day_23_minimum_energy = (2 ** 31) - 1
+day_23_rejection_threshold = 100000
+
+
+def day_23_part_two(raw_text: str) -> int:
+    return day_23_part_one(raw_text, room_size=4)
+
+
+def day_23_part_one(raw_string: str, room_size: int = 2) -> int:
+    global day_23_minimum_energy
+    loops = 0
+    all_configs = [Day23Config(day_23_load_data(raw_string), room_size=room_size)]
+    while all_configs and any([not cfg.completed for cfg in all_configs]):
+        loops += 1
+        print(f'({loops}) Looking at {len(all_configs)} configuration{"" if len(all_configs) == 1 else "s"}')
+        tuplised_set = set([cfg.tuple_ise() for cfg in all_configs])
+        print(f'Length of tuplised set: {len(tuplised_set)}')
+        energy_totals = [cfg.energy_usage for cfg in all_configs if cfg.completed]
+        if energy_totals:
+            day_23_minimum_energy = min(day_23_minimum_energy, min(energy_totals))
+            print(f'Minimum energy usage is now {day_23_minimum_energy}')
+        all_configs = [Day23Config.create_from_tuple(tpl, room_size=room_size)
+                       for tpl in tuplised_set]
+        next_configs = []
+        for cfg in all_configs:
+            next_configs += cfg.generate_next_configs()
+        all_configs = next_configs
+    return day_23_minimum_energy
+
+
+class Day23Config:
+    def __init__(self, config: (str, [str]), energy_usage: int = 0,
+                 room_size: int = 2):
+        self._config = config
+        self.energy_usage = energy_usage
+        self.completed = self.stalled = False
+        self.room_size = room_size
+
+    def generate_next_configs(self) -> [(str, [str])]:
+        if day_23_is_completed(self._config, self.room_size):
+            self.completed = True
+            return [self]
+        next_moves = day_23_get_next_valid_moves(self._config, self.room_size)
+        if len(next_moves) == 0 \
+                or self.energy_usage > min(day_23_rejection_threshold,
+                                           day_23_minimum_energy):
+            # think it takes at least 5 moves to get to this
+            self.stalled = True
+            return []
+        next_configs = [Day23Config(day_23_make_move(self._config, move),
+                                    self.energy_usage, self.room_size)
+                        for move in next_moves]
+        for config, move in zip(next_configs, next_moves):
+            config.energy_usage += day_23_get_energy_usage(move, config._config,
+                                                           self.room_size)
+        return next_configs
+
+    def tuple_ise(self) -> (str, int):
+        hallway, rooms = self._config
+        config_string = f'{hallway}' \
+                        f'{"".join([rm.ljust(self.room_size, " ") for rm in rooms])}'
+        return config_string, self.energy_usage
+
+    @staticmethod
+    def create_from_tuple(config_tuple: (str, int), room_size: int = 2) -> object:
+        raw_string, energy = config_tuple
+        hallway = raw_string[:11]
+        rooms = []
+        for i, raw in enumerate(raw_string[11::room_size]):
+            # room_chars = raw + raw_string[11 + (i * room_size) + 1]
+            start_slice = 11 + (i * room_size)
+            room_chars = raw_string[start_slice:start_slice + room_size]
+            room_occupants = "".join([ch for ch in room_chars if ch.isalpha()])
+            rooms.append(room_occupants)
+        return Day23Config(Configuration(hallway, rooms), energy, room_size)
+
+
+def day_23_get_next_valid_moves(config: (str, [str]),
+                                room_size: int = 2) -> [(int,)]:
+    def get_room(column_id: int) -> str:
+        return rooms[(column_id // 2) - 1]
+
+    def clear_passage(start_ind: int, dest_ind: int) -> bool:
+        passageway = hallway[start_ind + 1:dest_ind + 1] \
+            if start_ind < dest_ind else hallway[dest_ind:start_ind]
+        return all([ch == "." for ch in passageway])
+
+    moves = []
+    hallway, rooms = config
+    occupied_columns = [i for i, ch in enumerate(hallway) if ch in "ABCD"]
+    occupied_columns += [2 + (i * 2) for i, occupants in
+                         enumerate(rooms) if occupants]
+    for origin in occupied_columns:
+        for destination in range(11):
+            if destination == origin:
+                continue
+            if day_23_is_room(destination):
+                letter = get_room(origin)[-1] \
+                    if day_23_is_room(origin) else hallway[origin]
+                only_valid_destination = ("ABCD".index(letter) + 1) * 2
+                if destination == only_valid_destination and \
+                        len(get_room(destination)) < room_size and \
+                        (not any([ch != letter for ch in get_room(destination)])) and \
+                        clear_passage(origin, destination):
+                    moves.append(Move(origin, destination))
+            elif day_23_is_room(origin) and clear_passage(origin, destination):
+                # only move out of room if it still contains some non-native letters:
+                if any([ch != "ABCD"[(origin // 2) - 1] for ch in get_room(origin)]):
+                    moves.append(Move(origin, destination))
+    return moves
+
+
+def day_23_make_move(existing_config: (str, [str]), move: (int,)) -> (str, [str]):
+    """No validation, just move"""
+    hallway, rooms = existing_config
+    rooms = [[*r] for r in rooms]
+    orig, dest = move
+    if day_23_is_room(orig):
+        if day_23_is_room(dest):
+            rooms[(dest // 2) - 1].append(rooms[(orig // 2) - 1].pop())
+        else:
+            hallway = hallway[:dest] + rooms[(orig // 2) - 1].pop() + hallway[dest + 1:]
+    else:
+        letter = hallway[orig]
+        hallway = hallway[:orig] + "." + hallway[orig + 1:]
+        rooms[(dest // 2) - 1].append(letter)
+    return Configuration(hallway, ["".join(rm) for rm in rooms])
+
+
+def day_23_get_energy_usage(move: (int,), final_config: (str, [str]),
+                            room_size: int = 2) -> int:
+    def get_room(column_id: int) -> str:
+        return rooms[(column_id // 2) - 1]
+
+    orig_col, dest_col = move
+    hallway, rooms = final_config
+    letter = get_room(dest_col)[-1] if day_23_is_room(dest_col) \
+        else hallway[dest_col]
+    rate = {ltr: 10 ** power for ltr, power in zip("ABCD", range(4))}[letter]
+    steps = abs(dest_col - orig_col)
+    if day_23_is_room(orig_col):
+        steps += 1
+        if len(get_room(orig_col)) < room_size - 1:
+            steps += room_size - len(get_room(orig_col)) - 1
+    if day_23_is_room(dest_col):
+        steps += 1
+        if len(get_room(dest_col)) < room_size:
+            steps += room_size - len(get_room(dest_col))
+    return rate * steps
+
+
+def day_23_is_room(location_index: int) -> bool:
+    return location_index in range(2, 9, 2)
+
+
+def day_23_is_completed(configuration: (str, [str]), room_size: int = 2) -> bool:
+    return configuration.rooms == [ltr * room_size for ltr in "ABCD"] \
+           and configuration.hallway == "." * 11
+
+
+def day_23_insert_additional_rows(initial_input: str, extra_text: str) -> str:
+    lf = '\n'
+    if extra_text[-1] != lf:
+        extra_text += lf
+    lines = initial_input.split(lf)
+    return f'{lf.join(lines[:3])}{lf}{extra_text}{lf.join(lines[3:])}'
+
+
+Configuration = namedtuple("Configuration", "hallway rooms")
+Move = namedtuple("Move", "from_col to_col")
+
+
+def day_22_load_data(raw_input: str, all_space: bool = False) -> [(str, [int])]:
     raw_lines = Puzzle.convert_input(raw_input, None)
     converted_data = []
     for line in raw_lines:
@@ -88,7 +346,6 @@ def day_22_get_cuboid_dimensions(cuboid_dims: str) -> [int]:
         _, _, bounds = dimension.partition("=")
         start, _, end = bounds.partition("..")
         numbers += [int(dim) for dim in (start, end)]
-    # print(numbers)
     return numbers
 
 
@@ -113,19 +370,59 @@ def day_22_solve_part_two(data: [(str, [int])]) -> int:
     return total_on
 
 
+def day_22_try_for_part_two(data: [(str, [int])]) -> int:
+    no_of_cuboids = len(data)
+    if no_of_cuboids == 4:
+        print('hi')
+    this_cuboid_state, this_cuboid_dims = data[-1]
+    if no_of_cuboids == 1:
+        # ASSUMING the first cuboid is never 'off'
+        return day_22_get_cuboid_size(this_cuboid_dims)
+    non_overlapping_volume = day_22_get_cuboid_size(this_cuboid_dims) \
+        if this_cuboid_state == "on" else 0
+    for simultaneous_overlaps in range(1, no_of_cuboids):
+        sign = -1 if simultaneous_overlaps % 2 else 1
+        combs = combinations(range(no_of_cuboids - 1), simultaneous_overlaps)
+        for c in combs:
+            factor = sign
+            other_cuboids = [data[n] for n in c]
+            cuboid_combo = other_cuboids + [data[-1]]
+            overlap_dims = day_22_get_overlap_of_multiple_cuboids(cuboid_combo)
+            if other_cuboids[-1][0] == "off" and this_cuboid_state == "on":
+                factor = 1
+                if len(cuboid_combo) > 2:
+                    factor = 0
+            if no_of_cuboids == 4:
+                if len(overlap_dims) == 6:
+                    print(f'Combo: {c} adds {factor * day_22_get_cuboid_size(overlap_dims)}')
+            non_overlapping_volume += factor * day_22_get_cuboid_size(overlap_dims)
+    non_overlapping_volume += day_22_try_for_part_two(data[:-1])
+    return non_overlapping_volume
+
+
 def day_22_get_cuboid_size(dims: [int]) -> int:
-    lengths = [dims[(i * 2) + 1] - d + 1 for i, d in enumerate(dims[::2])]
-    if any([length < 0 for length in lengths]):
+    sides = [dims[(i * 2) + 1] - d + 1 for i, d in enumerate(dims[::2])]
+    if any([side_length < 0 for side_length in sides]):
         return 0
-    return product(lengths)
+    return product(sides)
 
 
 def day_22_calc_overlap_size(cuboid_1: [int], cuboid_2: [int]) -> int:
-    zipped = list(zip(cuboid_1, cuboid_2))
-    overlap_dims = []
-    for i, zc in enumerate(zipped):
-        overlap_dims.append(min(zc) if i % 2 else max(zc))
-    return day_22_get_cuboid_size(overlap_dims)
+    return day_22_get_cuboid_size(day_22_get_overlap_cuboid_dims(cuboid_1, cuboid_2))
+
+
+def day_22_get_overlap_of_multiple_cuboids(cuboids: [(str, [int])]) -> [int]:
+    overlap = cuboids[0][1]
+    for cbd in cuboids[1:]:
+        overlap = day_22_get_overlap_cuboid_dims(overlap, cbd[1])
+        if day_22_get_cuboid_size(overlap) == 0:
+            return [0, -1]
+    return overlap
+
+
+def day_22_get_overlap_cuboid_dims(cuboid_1: [int], cuboid_2: [int]) -> [int]:
+    zipped = zip(cuboid_1, cuboid_2)
+    return [(min(zc) if i % 2 else max(zc)) for i, zc in enumerate(zipped)]
 
 
 def day_21_load_data(raw_text: str) -> (int,):
@@ -238,10 +535,23 @@ def day_21_part_one(starting_spaces: (int,)):
 
 def day_20_part_one(raw_lines: [str]) -> int:
     algorithm, image = day_20_load_data(raw_lines)
-    for _ in range(2):
-        image = day_20_process_image(image, algorithm)
+    for n in range(2):
+        image = day_20_process_image(image, algorithm,
+                                     '#' if n % 2 and len(image) > 10 else '.')
         print('         Image Starts:')
         print('\n'.join(image))
+    return sum([ln.count('#') for ln in image])
+
+
+def day_20_part_two(raw_lines: [str]) -> int:
+    algorithm, image = day_20_load_data(raw_lines)
+    for n in range(50):
+        image = day_20_process_image(image, algorithm, '#' if n % 2 else '.')
+    print('         Image Starts:')
+    print('\n'.join(image))
+    with open('output.txt', 'a') as file:
+        for line in image:
+            file.write(line + '\n')
     return sum([ln.count('#') for ln in image])
 
 
@@ -255,39 +565,39 @@ def day_20_load_data(raw_lines: [str]) -> (str, [str]):
     return algorithm, input_image
 
 
-def day_20_process_image(image: [str], algorithm: str) -> [str]:
-    image = day_20_resize_image(image)
+def day_20_process_image(image: [str], algorithm: str,
+                         border_char: str = '.') -> [str]:
     width, height = len(image[0]), len(image)
-    if width > 99:
-        print('hi')
+    # border_char = algorithm[0] if width > 100 or height > 100 else '.'
     processed = []
-    for row_id in range(1, height - 1):
-        new_row = ''
-        for x in range(1, width - 1):
-            surrounding_string = day_20_get_surrounding_string(Point(x, row_id), image)
-            binary_list = [day_20_universal_convertor(ch) for ch in surrounding_string]
-            alg_ind = binary_to_int(binary_list)
-            new_row += algorithm[alg_ind]
-        processed += [new_row]
+    x_range, y_range = (range(dim + 2) for dim in (width, height))
+    for y in y_range:
+        processed_row = ''
+        for x in x_range:
+            found_string = day_20_surrounding_pixels(Point(x, y), image,
+                                                     empty_space_char=border_char)
+            binary_list = [day_20_universal_convertor(ch) for ch in found_string]
+            alg_index = binary_to_int(binary_list)
+            processed_row += algorithm[alg_index]
+        processed.append(processed_row)
     return processed
+
+
+def day_20_surrounding_pixels(loc_in_new_image: (int,), current_image: [str],
+                              empty_space_char: str = '.') -> str:
+    width, height = len(current_image[0]), len(current_image)
+    new_x, new_y = loc_in_new_image
+    output = [[empty_space_char for _ in range(3)] for _ in range(3)]
+    for i_y, y in enumerate(range(new_y - 2, new_y + 1)):
+        for i_x, x in enumerate(range(new_x - 2, new_x + 1)):
+            if 0 <= y < height and 0 <= x < width:
+                output[i_y][i_x] = current_image[y][x]
+    return ''.join([''.join([ch for ch in row]) for row in output])
 
 
 def day_20_get_surrounding_string(pixel_loc: (int,), whole_image: [str]) -> str:
     x, y = pixel_loc
     return ''.join([whole_image[row][x - 1:x + 2] for row in range(y - 1, y + 2)])
-
-
-def day_20_resize_image(image: [str]) -> [str]:
-    """extend the image by 2 pixels on every side, from max. indices for '#' character"""
-    if len(image) > 99:
-        print('hi')
-    rows_with_lit_pixels = [i for i, row in enumerate(image) if '#' in row]
-    y_min, y_max = tuple(func(rows_with_lit_pixels) for func in (min, max))
-    x_max = max([row.rfind('#') for row in image])
-    x_min = min([row.find('#') for row in image if '#' in row])
-    top_bottom_rows = ["." * ((x_max - x_min + 1) + 4)] * 2
-    middle_rows = [f'..{row[x_min:x_max + 1]}..' for row in image[y_min:y_max + 1]]
-    return top_bottom_rows + middle_rows + top_bottom_rows
 
 
 def day_20_universal_convertor(item_in: object) -> object:
