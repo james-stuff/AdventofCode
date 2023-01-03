@@ -2,6 +2,7 @@ from collections import namedtuple
 from itertools import product, permutations, combinations, cycle
 import random
 from math import prod as product
+import library as lib
 
 
 class Puzzle:
@@ -32,6 +33,8 @@ class Puzzle:
             raw_strings = list(filter(bool, raw_strings))
         if conversion_func == int and all([d.isnumeric() for d in raw_strings]):
             return [int(d) for d in raw_strings]
+        if conversion_func:
+            return [conversion_func(d) for d in raw_strings]
         return raw_strings
 
 
@@ -52,22 +55,52 @@ day_24_add_to_y = [6, 7, 10, 2, 15, 8, 1, 10, 5, 3, 5, 11, 12, 10]
 
 
 class Day24StepperBacker:
-    def __init__(self, models_and_zs: [tuple]):
+    def __init__(self, models_and_zs: dict, step_no: int = 13):
         self.models_and_zs = models_and_zs
+        self.step_no = step_no
 
-    def step_back(self, step_no: int) -> object:
+    def step_back(self) -> object:
+        new_ms_and_zs = {}
+        for z, model_num in self.models_and_zs.items():
+            step_combos = self.reverse_engineer_step(z)
+            for initial_z, new_digit in step_combos.items():
+                new_model_number = f"{new_digit}{model_num}"
+                if (initial_z not in new_ms_and_zs) or \
+                        (int(new_model_number) > int(new_ms_and_zs[initial_z])):
+                    new_ms_and_zs[initial_z] = new_model_number
+        if not new_ms_and_zs:
+            new_ms_and_zs = self.reverse_engineer_step()
+        return Day24StepperBacker(new_ms_and_zs, self.step_no - 1)
+
+    def reverse_engineer_step(self, final_z: int = 0) -> dict:
+        valid_w_z_combos = {}
+        x_increment, y_increment = (list_id[self.step_no] for list_id in
+                                    (day_24_add_to_x, day_24_add_to_y))
+        digits = range(1, 10)
+        for digit in digits:
+            if x_increment > 0:
+                initial_z = (final_z - y_increment - digit) // 26
+            else:
+                initial_z = (26 * final_z) + digit - x_increment
+            valid_w_z_combos[initial_z] = f"{digit}"
+        return valid_w_z_combos
+
+    def step_forward(self) -> object:
         new_ms_and_zs = []
-        for model, z_gen in self.models_and_zs:
-            """do reverse step for each model/z combination"""
-        return Day24StepperBacker(new_ms_and_zs)
+        for model_num, z in self.models_and_zs:
+            step_combos = self.reverse_engineer_step(z)
+            for new_digit, final_z in step_combos:
+                new_ms_and_zs.append((f"{model_num}{new_digit}", final_z))
+        if not new_ms_and_zs:
+            new_ms_and_zs = self.reverse_engineer_step()
+        return Day24StepperBacker(new_ms_and_zs, self.step_no - 1)
 
 
 def day_24_part_one():
-    sb = Day24StepperBacker([])
+    sb = Day24StepperBacker({})
     for step in range(13, -1, -1):
-        sb = sb.step_back(step)
-    return max(filter(lambda mz: next(mz[1]) == 0, sb.models_and_zs[0]),
-               key=lambda mzs: int(mzs[0]))
+        sb = sb.step_back()
+    return sb.models_and_zs[0]
 
 
 def day_24_run_program(lines: [str], inputs: (int,),
@@ -574,7 +607,7 @@ def day_20_process_image(image: [str], algorithm: str,
     for y in y_range:
         processed_row = ''
         for x in x_range:
-            found_string = day_20_surrounding_pixels(Point(x, y), image,
+            found_string = day_20_surrounding_pixels(lib.Point(x, y), image,
                                                      empty_space_char=border_char)
             binary_list = [day_20_universal_convertor(ch) for ch in found_string]
             alg_index = binary_to_int(binary_list)
@@ -676,7 +709,6 @@ def day_19_find_all_scanner_offsets(scanner_obs: dict) -> [(int,)]:
                     if scanner_id in scanner_known_points:
                         break
     return scanner_offsets
-
 
 
 def day_19_manhattan_distance(point_1: (int,), point_2: (int,)) -> int:
@@ -910,13 +942,13 @@ def day_18_split_expression(expression: str) -> (str, str):
 def day_17_part_two(target_area: ((int, ), )) -> int:
     x_range, y_range = target_area
     print(f'Starting from y = {min(y_range)}')
-    return sum([day_17_velocity_hits_target(Point(x, y), target_area)
+    return sum([day_17_velocity_hits_target(lib.Point(x, y), target_area)
                 for x in range(max(x_range) + 1)
                 for y in range(min(y_range), 150)])
     # successes = 0
     # for x in range((max(x_range) + 1) // 2):
     #     for y in range(min(y_range), 150):
-    #         successes += day_17_velocity_hits_target(Point(x, y), target_area)
+    #         successes += day_17_velocity_hits_target(lib.Point(x, y), target_area)
     # return successes
 
 
@@ -925,7 +957,7 @@ def day_17_part_one(target_area: ((int, ), )) -> int:
     greatest_y_velocity = 0
     for x in range((max(x_range) + 1) // 2):
         for y in range(150):
-            if day_17_velocity_hits_target(Point(x, y), target_area):
+            if day_17_velocity_hits_target(lib.Point(x, y), target_area):
                 greatest_y_velocity = max(greatest_y_velocity, y)
     return day_17_peak_given_starting_y_velocity(greatest_y_velocity)
 
@@ -936,10 +968,10 @@ def day_17_peak_given_starting_y_velocity(y_velocity: int) -> int:
 
 def day_17_velocity_hits_target(velocity: (int, ), target: ((int,), )) -> bool:
     initial_velocity = velocity
-    x, y = Point(0, 0)
+    x, y = lib.Point(0, 0)
     x_range, y_range = target
     while x <= max(x_range) and y >= min(y_range):
-        new_point, velocity = day_17_trajectory_step(Point(x, y), velocity)
+        new_point, velocity = day_17_trajectory_step(lib.Point(x, y), velocity)
         x, y = new_point
         if min(x_range) <= x <= max(x_range) and min(y_range) <= y <= max(y_range):
             print(f'Velocity: {initial_velocity} -> ({x}, {y}).')
@@ -950,8 +982,8 @@ def day_17_velocity_hits_target(velocity: (int, ), target: ((int,), )) -> bool:
 
 def day_17_trajectory_step(start: (int, ), velocity: (int, )) -> ((int, ), (int, )):
     """Assumes x-component of velocity would never be < 0"""
-    next_point = Point(start.x + velocity.x, start.y + velocity.y)
-    next_velocity = Point(max(velocity.x - 1, 0), velocity.y - 1)
+    next_point = lib.Point(start.x + velocity.x, start.y + velocity.y)
+    next_velocity = lib.Point(max(velocity.x - 1, 0), velocity.y - 1)
     return next_point, next_velocity
 
 
@@ -1094,78 +1126,83 @@ def day_16_packet_is_operator(packet: str) -> bool:
     return binary_to_int(packet[3:6]) != 4
 
 
-def day_15_part_one(whole_grid: [[int]]):
-    x, y, total = 0, 0, 0
-    edge_length = len(whole_grid)
-    while x < edge_length and y < edge_length:
-        print(f'Next square origin: ({x}, {y})')
-        next_square = day_15_cut_square(whole_grid, Point(x, y), 5)
-        end_point, section_total = day_15_get_min_path_total_across_square(next_square)
-        total += section_total
-        print(f'--> Section total: {section_total}')
-        x_incr, y_incr = end_point
-        x, y = x + x_incr, y + y_incr
-        if x == edge_length - 1 or y == edge_length - 1:
-            print('Edge is reached')
+def day_15_part_one() -> int:
+    return day_15_dijkstra_solution(Puzzle(15).get_text_input())
+
+
+def day_15_part_two() -> int:
+    return day_15_big_grid_dijkstra(Puzzle(15).get_text_input())
+
+
+def day_15_big_grid_dijkstra(all_text: str) -> int:
+    grid = day_15_build_grid(all_text)
+    end = lib.Point(*(5 * (co_ord + 1) - 1 for co_ord in day_15_find_end_point(grid)))
+    all_points = [lib.Point(x, y) for y in range(len(grid))
+                  for x in range(len(grid[0]))]
+    totals = {pt: 1_000_000 for pt in all_points}
+    totals[lib.Point(0, 0)] = 0
+    while all_points:
+        next_point = min(all_points, key=lambda p: totals[p])
+        neighbours = day_15_get_big_grid_neighbours(next_point, grid)
+        for np in neighbours:
+            if np not in totals:
+                totals[np] = 1_000_000
+                all_points.append(np)
+            risk_from_start = totals[next_point] + day_15_point_value_in_big_grid(np, grid)
+            if risk_from_start < totals[np]:
+                totals[np] = risk_from_start
+        if next_point == end:
             break
-    if x == edge_length - 1:
-        total += sum([row[-1] for row in whole_grid[y + 1:]])
-    if y == edge_length - 1:
-        total += sum(whole_grid[y][x + 1:])
-    return total
+        all_points.remove(next_point)
+    return totals[end]
 
 
-def day_15_get_min_path_total_across_square(square: [[int]]) -> ((int), int):
-    all_paths = day_15_get_all_paths_across_sub_square(square)
-    min_total = min([*all_paths.values()])
-    best_paths = [k for k, v in all_paths.items() if v == min_total]
-    if len(best_paths) > 1:
-        print(f'There is more than one optimal path')
-        return best_paths[random.randrange(len(best_paths))], min_total
-    return [k for k, v in all_paths.items() if v == min_total][0], min_total
+def day_15_point_value_in_big_grid(point: lib.Point, small_grid: [[int]]) -> int:
+    x, y = point
+    small_grid_size = len(small_grid)
+    if x < small_grid_size and y < small_grid_size:
+        return small_grid[y][x]
+    times_offset = sum(co_ord // small_grid_size for co_ord in (x, y))
+    sm_x, sm_y = (c % small_grid_size for c in (x, y))
+    original_value = small_grid[sm_y][sm_x]
+    big_grid_value = original_value + times_offset
+    if big_grid_value > 9:
+        return big_grid_value - 9
+    return big_grid_value
+            
+            
+def day_15_get_big_grid_neighbours(point: lib.Point, grid: [[int]]) -> [lib.Point]:
+    def in_big_grid(point: lib.Point): return all([0 <= c < len(grid) * 5 for c in point])
+    return [*filter(lambda pt: in_big_grid(pt), [v(point) for v in lib.point_moves.values()])]
 
 
-def day_15_get_all_paths_across_sub_square(sub_square: [[int]]) -> {}:
-    possible_paths = day_15_binary_combinations((len(sub_square) - 1) * 2)
-    paths_dict = {}
-    for path in possible_paths:
-        end, path_total = day_15_calc_path_total(sub_square, path)
-        paths_dict[end] = path_total
-    return paths_dict
-
-
-def day_15_binary_combinations(length: int = 4) -> [bool]:
-    return product(range(2), repeat=length)
-
-
-def day_15_cut_square(whole_grid: [[int]], origin: (int, int), size: int) -> [[int]]:
-    whole_grid_size = len(whole_grid)
-    ox, oy = origin.x, origin.y
-    if ox + size > whole_grid_size:
-        size = whole_grid_size - ox
-    if oy + size > whole_grid_size:
-        size = whole_grid_size - oy
-    return [[whole_grid[y][x] for x in range(ox, ox + size)]
-            for y in range(oy, oy + size)]
-
-
-def day_15_calc_path_total(square: [[int]], path_steps: (bool)) -> ((int), int):
-    """True -> across, False -> down"""
-    x, y, total = 0, 0, 0
-    width = len(square)
-    end_point = Point(0, 0)
-    # print('\nNew Path: ', end='')
-    for go_across in path_steps:
-        if go_across:
-            x += 1
-        else:
-            y += 1
-        if any([dim >= width for dim in (x, y)]):
+def day_15_dijkstra_solution(all_text: str) -> int:
+    grid = day_15_build_grid(all_text)
+    end = day_15_find_end_point(grid)
+    all_points = [lib.Point(x, y) for y in range(len(grid))
+                  for x in range(len(grid[0]))]
+    totals = {pt: 1_000_000 for pt in all_points}
+    totals[lib.Point(0, 0)] = 0
+    while all_points:
+        next_point = min(all_points, key=lambda p: totals[p])
+        neighbours = lib.get_neighbours_in_grid(next_point, grid)
+        for np in neighbours:
+            neighbour_x, neighbour_y = np
+            risk_from_start = totals[next_point] + grid[neighbour_y][neighbour_x]
+            if risk_from_start < totals[np]:
+                totals[np] = risk_from_start
+        if next_point == end:
             break
-        total += square[y][x]
-        end_point = Point(x, y)
-        # print(square[y][x], end='')
-    return end_point, total
+        all_points.remove(next_point)
+    return totals[end]
+
+
+def day_15_build_grid(text: str) -> [[int]]:
+    return day_9_load_data(text)
+
+
+def day_15_find_end_point(grid: [[int]]) -> object:
+    return lib.Point(len(grid[0]) - 1, len(grid) - 1)
 
 
 def day_14_part_one(raw_input: [str]) -> int:
@@ -1268,7 +1305,7 @@ def day_13_part_two(raw_input: [str]):
 
 
 def day_13_load_data(raw_lines: [str]) -> ({tuple}, [tuple]):
-    points = {eval(f"Point({ln})") for ln in raw_lines if "," in ln}
+    points = {eval(f"lib.Point({ln})") for ln in raw_lines if "," in ln}
     folds = []
     for line in raw_lines:
         if "=" in line:
@@ -1283,17 +1320,17 @@ def day_13_print_page(dots: {(int, int)}):
     x_max, y_max = max([d.x for d in dots]), max([d.y for d in dots])
     print(f'Page size: {x_max + 1} x {y_max + 1}')
     for y in range(y_max + 1):
-        print(''.join(["#" if Point(x, y) in dots else "." for x in range(x_max + 1)]))
+        print(''.join(["#" if lib.Point(x, y) in dots else "." for x in range(x_max + 1)]))
 
 
 def day_13_fold_up(dots: [(int, int)], axis_value: int) -> {(int, int)}:
-    new_dots = [d if d.y < axis_value else Point(d.x, (axis_value * 2) - d.y)
+    new_dots = [d if d.y < axis_value else lib.Point(d.x, (axis_value * 2) - d.y)
                 for d in dots]
     return set(new_dots)
 
 
 def day_13_fold_to_left(dots: [(int, int)], axis_value: int) -> {(int, int)}:
-    new_dots = [d if d.x < axis_value else Point((axis_value * 2) - d.x, d.y)
+    new_dots = [d if d.x < axis_value else lib.Point((axis_value * 2) - d.x, d.y)
                 for d in dots]
     return set(new_dots)
 
@@ -1395,7 +1432,7 @@ def day_11_flash_step(octopi: [[int]]) -> [[int]]:
         iterate = False
         for y, row in enumerate(octopi):
             for x, octopus in enumerate(row):
-                location = Point(x, y)
+                location = lib.Point(x, y)
                 if octopus > 9 and location not in flashed:
                     for n_x, n_y in day_11_get_all_neighbours(location, x_max, y_max):
                         octopi[n_y][n_x] += 1
@@ -1611,7 +1648,7 @@ def day_9_extended_x_values(x_vals: [int]) -> [int]:
 
 def day_9_get_all_low_point_co_ordinates(data_rows: [[int]]) -> [(int, int)]:
     max_y, max_x = len(data_rows), len(data_rows[0])
-    return [Point(x, y) for y in range(max_y) for x in range(max_x)
+    return [lib.Point(x, y) for y in range(max_y) for x in range(max_x)
             if day_9_is_low_point(x, y, data_rows)]
 
 
@@ -1816,7 +1853,7 @@ def day_6_part_two(starting_fish: [int], generations: int) -> int:
 # 4. determine the size of the grid using max. x and y found in lines
 # 5. iterate through every point in grid a count occurrences of that point in the list
 # 6. count number of points where no. of appearances in the big list is >=2
-Point = namedtuple("Point", "x y")
+# Point = namedtuple("Point", "x y")
 Line = namedtuple("Line", "a b")
 
 
@@ -1838,17 +1875,17 @@ def day_5_points_from_input_rows(input_rows: [str]) -> []:
     lines = []
     for row in input_rows:
         pt_1, _, pt_2 = row.partition(" -> ")
-        points = (Point(*tuple(int(c) for c in eval(pt))) for pt in (pt_1, pt_2))
+        points = (lib.Point(*tuple(int(c) for c in eval(pt))) for pt in (pt_1, pt_2))
         new_line = Line(*points)
         lines.append(new_line)
     return lines
 
 
-def day_5_count_danger_points(x_max: int, y_max: int, vents: {Point: int}) -> int:
+def day_5_count_danger_points(x_max: int, y_max: int, vents: {lib.Point: int}) -> int:
     return len([v for v in vents.values() if v >= 2])
 
 
-def day_5_expand_all_lines(lines: [Line]) -> {Point: int}:
+def day_5_expand_all_lines(lines: [Line]) -> {lib.Point: int}:
     all_vent_points = {}
     for ln in lines:
         new_points = day_5_expand_line(ln)
@@ -1860,7 +1897,7 @@ def day_5_expand_all_lines(lines: [Line]) -> {Point: int}:
     return all_vent_points
 
 
-def day_5_expand_line(line: Line) -> [Point]:
+def day_5_expand_line(line: Line) -> [lib.Point]:
     x_diff, y_diff = line.b.x - line.a.x, line.b.y - line.a.y
     x_range, y_range = 0, 0
     if x_diff:
@@ -1868,20 +1905,20 @@ def day_5_expand_line(line: Line) -> [Point]:
     if y_diff:
         y_range = range(y_diff + 1) if y_diff > 0 else range(0, y_diff - 1, -1)
     if x_diff and y_diff:
-        return [Point(line.a.x + x, line.a.y + y) for x, y in zip(x_range, y_range)]
+        return [lib.Point(line.a.x + x, line.a.y + y) for x, y in zip(x_range, y_range)]
     if x_diff:
-        return [Point(line.a.x + x, line.a.y) for x in x_range]
-    return [Point(line.a.x, line.a.y + y) for y in y_range]
+        return [lib.Point(line.a.x + x, line.a.y) for x in x_range]
+    return [lib.Point(line.a.x, line.a.y + y) for y in y_range]
 
 
 # x_dim, y_dim = abs(line.b.x - line.a.x), abs(line.b.y - line.a.y)
     # x_origin, y_origin = min(line.a.x, line.b.x), min(line.a.y, line.b.y)
     # if x_dim and y_dim:
     #     assert x_dim == y_dim
-    #     return [Point(line.a.x + n, line.a.y + n) for n in range(x_dim + 1)]
+    #     return [lib.Point(line.a.x + n, line.a.y + n) for n in range(x_dim + 1)]
     # if x_dim:
-    #     return [Point(x, line.a.y) for x in range(x_origin, x_origin + x_dim + 1)]
-    # return [Point(line.a.x, y) for y in range(y_origin, y_origin + y_dim + 1)]
+    #     return [lib.Point(x, line.a.y) for x in range(x_origin, x_origin + x_dim + 1)]
+    # return [lib.Point(line.a.x, y) for y in range(y_origin, y_origin + y_dim + 1)]
 
 
 def day_5_non_diagonal_lines(all_lines: [Line]) -> [Line]:

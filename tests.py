@@ -1,6 +1,8 @@
-from main import Puzzle, Point
+from main import Puzzle
 import main
 import itertools
+from library import verify_solution
+import library as lib
 
 
 class TestDayTwentyFour:
@@ -83,14 +85,14 @@ mod w 2"""
                 candidate = f'{example_num[:12]}{last_digits}'
                 final_z = main.day_24_run_program(monad, candidate)["z"]
                 # print(final_z)
-                if not final_z:
-                    print(f'{candidate} IS VALID!')
+                # if not final_z:
+                #     print(f'{candidate} IS VALID!')
         for z in range(962, 962 + 26):
             print(f'** INITIAL z: {z}')
             for n in range(1, 10):
                 valid = self.validity_predictor(f'{n}21', initial_z=z)
                 if valid:
-                    print(f'{str(n)}21 is valid model number fragment')
+                    # print(f'{str(n)}21 is valid model number fragment')
                     assert self.model_no_fragment_is_valid(f'{n}21', initial_z=z)
                 else:
                     assert not self.model_no_fragment_is_valid(f'{n}21', initial_z=z)
@@ -104,7 +106,7 @@ mod w 2"""
 
     @staticmethod
     def model_no_fragment_is_valid(model_number: str, initial_z: int=0) -> bool:
-        print(f"Testing {model_number}, z={initial_z}")
+        # print(f"Testing {model_number}, z={initial_z}")
         assert "0" not in model_number
         monad_prog = Puzzle(24).input_as_list(None)
         final_state = main.day_24_run_program(monad_prog[-18 * len(model_number):],
@@ -132,6 +134,16 @@ mod w 2"""
             #     assert self.model_no_fragment_is_valid(str(input_num), next(gen))
             print(f'input number: {input_num} -> z: {[next(gen) for _ in range(1)]}')
 
+    def test_using_class(self):
+        sb = main.Day24StepperBacker({})
+        for step in range(14):
+            sb = sb.step_back()
+            print(f"After step {step + 1}, there are {len(sb.models_and_zs)} model nos.")
+        print(f"Final list: {sb.models_and_zs}")
+        assert 0 in sb.models_and_zs
+        # assert len(sb.models_and_zs) == 7290
+        # 39999999999999 is too high, and in fact not even valid
+
     def test_go_back_two_steps(self):
         print('\n*** TWO-STEP process')
         valid_items = []
@@ -147,7 +159,7 @@ mod w 2"""
                 #     print(dgt, [g for g in gen])
                             valid_items.append((int(f"{dgt_3}{dgt}{end_digit}"), next(zg_3)))
         for vi in valid_items:
-            print(f"{vi}")
+            # print(f"{vi}")
             three_digits, init_z = vi
             assert self.model_no_fragment_is_valid(f"{three_digits}", init_z)
         assert len(valid_items) == 729
@@ -158,7 +170,6 @@ mod w 2"""
         y_increment = main.day_24_add_to_y[step_no]
         w_range = range(1, 10)
         for w in w_range:
-            # z_generator = itertools.count(26 + w - x_increment, 26)
             initial_z = (26 * final_z) + w - x_increment
             z_generator = iter(range(initial_z, initial_z + 1))
             valid_w_z_combos.append((w, z_generator))
@@ -175,20 +186,15 @@ mod w 2"""
 
     @staticmethod
     def readable_step(z: int, digit: int, x_incr: int, y_incr: int) -> (int, ):
-        x = (digit - x_incr) != z % 26
+        non_alignment = (digit - x_incr) != z % 26
         if x_incr <= 0:
             z //= 26
-        if x:
-            y = 26
-            z *= y
-            y = (digit + y_incr) * x
-            z += y
-        else:
-            y = 0   # does this make any difference?
-        return x, y, z
+        if non_alignment:
+            z = (z * 26) + digit + y_incr
+        return int(non_alignment), (digit + y_incr if non_alignment else 0), z
 
     def test_one_off(self):
-        assert self.model_no_fragment_is_valid("99", 252)
+        assert self.model_no_fragment_is_valid("39999999999999", 0) == False
 
     def validity_predictor(self, model_number: str, initial_z: int=0) -> bool:
         state = main.day_24_run_program([], "")
@@ -198,18 +204,6 @@ mod w 2"""
                                                    main.day_24_add_to_x[-len(model_number):],
                                                    main.day_24_add_to_y[-len(model_number):]):
             number = int(mn_digit)
-            # state["w"] = number
-            # state["x"] = ((state["z"] % 26) + x_incr) != number
-            # # left side of != could go negative, but "x" limited to 0 or 1
-            # state["y"] = (25 * state["x"]) + 1
-            # if div_z:
-            #     state["z"] = state["z"] // 26
-            #     # div_z only True when add_to_x <= 0
-            # # at this point, y can only be 1 or 26
-            # state["z"] *= state["y"]
-            # state["y"] = (number + y_incr) * state["x"]
-            # # y never goes negative
-            # state["z"] += state["y"]
             state = self.process_readable_step(state, number, x_incr, y_incr)
         # print(state)
         monad_prog = Puzzle(24).input_as_list(None)
@@ -220,8 +214,10 @@ mod w 2"""
         # assert self.model_no_fragment_is_valid(model_number)
         return state["z"] == 0
 
-    def tst_part_one(self):
-        main.day_24_part_one()
+    def test_part_one(self):
+        solution = main.day_24_part_one()
+        print(f"Part One solution is {solution}")
+        assert int(solution) < 39999999999999
 
     # To get final z = 0:   (x=0, y=0, z<26 always -> final z=0 if div_z)
     #   last digit == prev. z (would be prev. z + x_incr but x_incr = 0 here)
@@ -683,10 +679,10 @@ class TestDayTwenty:
         algorithm, image = main.day_20_load_data(Puzzle.convert_input(self.example_input, None))
         print('\n')
         print('\n', image)
-        assert main.day_20_surrounding_pixels(main.Point(-3, -3), image) == '.' * 9
-        assert main.day_20_surrounding_pixels(main.Point(0, 0), image) == ('.' * 8) + '#'
-        assert main.day_20_surrounding_pixels(main.Point(100, 100), image) == '.' * 9
-        assert main.day_20_surrounding_pixels(main.Point(4, 3), image) == '.....##..'
+        assert main.day_20_surrounding_pixels(main.lib.Point(-3, -3), image) == '.' * 9
+        assert main.day_20_surrounding_pixels(main.lib.Point(0, 0), image) == ('.' * 8) + '#'
+        assert main.day_20_surrounding_pixels(main.lib.Point(100, 100), image) == '.' * 9
+        assert main.day_20_surrounding_pixels(main.lib.Point(4, 3), image) == '.....##..'
 
     def test_image_conversion(self):
         algo, grid = main.day_20_load_data(Puzzle.convert_input(self.example_input, None))
@@ -1004,14 +1000,14 @@ class TestDayEighteen:
 
 class TestDaySeventeen:
     def test_trajectory_calcs(self):
-        assert main.day_17_trajectory_step(Point(0, 0), Point(10, 10)) == ((10, 10), (9, 9))
-        step_one = main.day_17_trajectory_step(Point(0, 0), Point(6, 6))
+        assert main.day_17_trajectory_step(lib.Point(0, 0), lib.Point(10, 10)) == ((10, 10), (9, 9))
+        step_one = main.day_17_trajectory_step(lib.Point(0, 0), lib.Point(6, 6))
         assert main.day_17_trajectory_step(*step_one) == ((11, 11), (4, 4))
         target_area = ((20, 30), (-10, -5))
-        assert main.day_17_velocity_hits_target(Point(7, 2), target_area)
-        assert main.day_17_velocity_hits_target(Point(6, 3), target_area)
-        assert main.day_17_velocity_hits_target(Point(9, 0), target_area)
-        assert not main.day_17_velocity_hits_target(Point(17, -4), target_area)
+        assert main.day_17_velocity_hits_target(lib.Point(7, 2), target_area)
+        assert main.day_17_velocity_hits_target(lib.Point(6, 3), target_area)
+        assert main.day_17_velocity_hits_target(lib.Point(9, 0), target_area)
+        assert not main.day_17_velocity_hits_target(lib.Point(17, -4), target_area)
         assert main.day_17_peak_given_starting_y_velocity(2) == 3
         assert main.day_17_peak_given_starting_y_velocity(3) == 6
         assert main.day_17_peak_given_starting_y_velocity(0) == 0
@@ -1144,28 +1140,25 @@ class TestDayFifteen:
 1293138521
 2311944581"""
 
-    def test_path_creation(self):
-        example_grid = main.day_9_load_data(self.example_input)
-        assert main.day_15_calc_path_total([[1, 3], [2, 1]], (True, False)) == (main.Point(1, 1), 4)
-        assert main.day_15_calc_path_total([[1, 3], [2, 1]], (False,)) == (main.Point(0, 1), 2)
-        assert main.day_15_cut_square(example_grid, main.Point(1, 1), 4) == \
-               [[3, 8, 1, 3], [1, 3, 6, 5], [6, 9, 4, 9], [4, 6, 3, 4]]
-        assert main.day_15_cut_square(example_grid, main.Point(8, 6), 4) == [[2, 1], [3, 9]]
-        assert main.day_15_cut_square(example_grid, main.Point(9, 1), 4) == [[2]]
-        assert main.day_15_cut_square(example_grid, main.Point(0, 7), 4) == [[3, 1, 2], [1, 2, 9], [2, 3, 1]]
-        assert main.day_15_get_min_path_total_across_square([[1, 3], [2, 1]]) == (main.Point(0, 1), 2)
-        sq = main.day_15_cut_square(example_grid, main.Point(0, 1), 3)
-        print('3x3 square test:')
-        assert main.day_15_get_min_path_total_across_square(sq) == (main.Point(0, 2), 5)
-        print('last test')
-        assert main.day_15_calc_path_total([[1, 3], [2, 1]], (True, True, True)) == \
-               (main.Point(1, 0), 3)
+    def test_setup(self):
+        assert main.day_15_dijkstra_solution(self.example_input) == 40
+        grid = main.day_15_build_grid(self.example_input)
+        neighbours = main.day_15_get_big_grid_neighbours(lib.Point(49, 6), grid)
+        assert len(neighbours) == 3
+        assert main.day_15_point_value_in_big_grid(lib.Point(0, 0), grid) == 1
+        assert main.day_15_point_value_in_big_grid(lib.Point(9, 9), grid) == 1
+        assert main.day_15_point_value_in_big_grid(lib.Point(10, 0), grid) == 2
+        assert main.day_15_point_value_in_big_grid(lib.Point(49, 49), grid) == 9
+        assert main.day_15_point_value_in_big_grid(lib.Point(3, 15), grid) == 1
+        assert main.day_15_point_value_in_big_grid(lib.Point(48, 47), grid) == 2
+        result = main.day_15_big_grid_dijkstra(self.example_input)
+        assert result == 315
 
-    def test_part_one(self):
-        example_grid = main.day_9_load_data(self.example_input)
-        for _ in range(20):
-            solution = min([main.day_15_part_one(example_grid) for _ in range(20)])
-            print(f'Lowest path risk sum is {solution}')
+    def est_part_one(self):
+        verify_solution(main.day_15_part_one(), 595)
+
+    def test_part_two(self):
+        verify_solution(main.day_15_part_two(), part_two=True)
 
 
 class TestDayFourteen:
@@ -1565,7 +1558,7 @@ class TestDayNine:
         print(data.replace('9', '-'))
         eg_data = main.day_9_load_data(self.example_input)
         assert main.day_9_get_all_low_point_co_ordinates(eg_data) == \
-               [Point(x=1, y=0), Point(x=9, y=0), Point(x=2, y=2), Point(x=6, y=4)]
+               [lib.Point(x=1, y=0), lib.Point(x=9, y=0), lib.Point(x=2, y=2), lib.Point(x=6, y=4)]
         # assert main.day_9_extended_x_values([2]) == [2]
         # assert main.day_9_extended_x_values([1,2,3]) == list(range(5))
         # assert main.day_9_extended_x_values([1,2,3,5]) == list(range(5)) + [5]
@@ -1576,11 +1569,11 @@ class TestDayNine:
         # assert main.day_9_get_all_groups_in_row([1, 2, 3, 9, 9, 9, 9, 8, 8]) == \
         #        [[0, 1, 2], [7, 8]]
         # assert main.day_9_get_all_groups_in_row([9, 1, 9, 0, 9]) == [[1], [3]]
-        assert main.day_9_basin_size_from_low_point(Point(x=1, y=0), eg_data) == 3
-        assert main.day_9_basin_size_from_low_point(Point(x=9, y=0), eg_data) == 9
-        assert main.day_9_basin_size_from_low_point(Point(x=2, y=2), eg_data) == 14
-        assert main.day_9_basin_size_from_low_point(Point(x=9, y=4), eg_data) == 9
-        assert main.day_9_basin_size_from_low_point(Point(x=75, y=10),
+        assert main.day_9_basin_size_from_low_point(lib.Point(x=1, y=0), eg_data) == 3
+        assert main.day_9_basin_size_from_low_point(lib.Point(x=9, y=0), eg_data) == 9
+        assert main.day_9_basin_size_from_low_point(lib.Point(x=2, y=2), eg_data) == 14
+        assert main.day_9_basin_size_from_low_point(lib.Point(x=9, y=4), eg_data) == 9
+        assert main.day_9_basin_size_from_low_point(lib.Point(x=75, y=10),
                                                     main.day_9_load_data(data)) == 127
 
     def test_part_two(self):
@@ -1836,7 +1829,7 @@ class TestDayFive:
             print(main.day_5_expand_line(ln))
         all_vent_points = main.day_5_expand_all_lines(lines)
         assert len(all_vent_points) == 21
-        assert all_vent_points[main.Point(0, 9)] == 2
+        assert all_vent_points[main.lib.Point(0, 9)] == 2
         assert main.day_5_count_danger_points(9, 9, all_vent_points) == 5
         assert main.day_5_part_one(input_rows) == 5
 
@@ -1855,7 +1848,7 @@ class TestDayFive:
         assert len(found_lines) == 10
         first_diagonal = main.day_5_expand_line(found_lines[1])
         assert len(first_diagonal) == 9
-        expected_points = [main.Point(x, y) for x, y in zip(range(8, -1, -1), range(9))]
+        expected_points = [main.lib.Point(x, y) for x, y in zip(range(8, -1, -1), range(9))]
         print(f'Expected points are {expected_points}')
         assert first_diagonal == expected_points
 
