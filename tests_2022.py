@@ -35,28 +35,34 @@ Sensor at x=20, y=1: closest beacon is at x=15, y=3
         data = aoc_2022.day_15_load_sensor_beacon_data(self.example)
         assert not aoc_2022.day_15_point_is_not_reached_by_any_sensor(data, lib.Point(0, 0))
         assert aoc_2022.day_15_point_is_not_reached_by_any_sensor(data, lib.Point(14, 11))
-        print(lib.manhattan_distance(lib.Point(1.5, 1.5), lib.Point(2, 2)))
-        print(aoc_2022.day_15_get_corners(lib.Point(8, 7), lib.Point(2, 10)))
+        # print(aoc_2022.day_15_get_corners(lib.Point(8, 7), lib.Point(2, 10)))
         assert aoc_2022.day_15_get_gradients_and_intercepts(lib.Point(8, 7),
                                                             lib.Point(2, 10)) == \
-               [(1, -10), (1, 8), (-1, 6), (-1, 24)]
+               [(1, -11), (1, 9), (-1, 5), (-1, 25)]
         assert aoc_2022.day_15_get_gradients_and_intercepts(lib.Point(9, 16),
                                                             lib.Point(10, 16)) == \
-               [(1, 6), (1, 8), (-1, 24), (-1, 26)]
-        just_unreachables = aoc_2022.day_15_get_all_just_unreachable_points(lib.Point(9, 16),
-                                                            lib.Point(10, 16))
-        # print(just_unreachables)
-        assert len(just_unreachables) == 8
-        assert len(set(just_unreachables)) == len(just_unreachables)
-        # print(data)
-        data = aoc_2022.day_15_load_sensor_beacon_data(aoc_2022.Puzzle22(15).get_text_input())
-        all_unreachables = []
-        for s, b in data.items():
-            all_unreachables += aoc_2022.day_15_get_all_just_unreachable_points(s, b)
-        print(f"There are {len(all_unreachables)} just unreachable points")
-        # print(sorted(all_unreachables, key=lambda ur: all_unreachables.count(ur),
-        #              reverse=True)[:10])
-        # assert aoc_2022.day_15_find_single_blind_spot(self.example) == lib.Point(14, 11)
+               [(1, 5), (1, 9), (-1, 23), (-1, 27)]
+        intersections = aoc_2022.day_15_find_periphery_intersections(lib.Point(8, 7),
+                                                                    lib.Point(9, 16), data)
+        print(intersections)
+        all_intersections = []
+        for ki, sensor in enumerate(data.keys()):
+            print(sensor)
+            for other_sensor in [*data.keys()][ki + 1:]:
+                new_intersections = aoc_2022.day_15_find_periphery_intersections(sensor,
+                                                                                 other_sensor,
+                                                                                 data)
+                # print(f"Found {len(new_intersections)} new intersections: {new_intersections}")
+                all_intersections += new_intersections
+        print(f"There are {len(all_intersections)} intersections in total")
+        winner = max(all_intersections, key=lambda i: all_intersections.count(i))
+        print(f"Our point is {winner}, with {all_intersections.count(winner)} intersections")
+        assert aoc_2022.day_15_find_single_blind_spot(self.example) == lib.Point(14, 11)
+        assert (winner.x * 4_000_000) + winner.y == 56000011
+
+    def test_part_two(self):
+        lib.verify_solution(aoc_2022.day_15_part_two(), part_two=True)
+        # 2110003570473 is too low
 
 
 class TestDay14:

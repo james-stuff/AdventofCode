@@ -12,6 +12,11 @@ def day_15_part_one() -> int:
     return day_15_count_positions_without_sensor(Puzzle22(15).get_text_input(), 2_000_000)
 
 
+def day_15_part_two() -> int:
+    blind_spot = day_15_find_single_blind_spot(Puzzle22(15).get_text_input())
+    return (blind_spot.x * 4_000_000) + blind_spot.y
+
+
 def day_15_load_sensor_beacon_data(all_text: str) -> dict:
     data = {}
     rows = Puzzle22.convert_input(all_text, str)
@@ -40,31 +45,90 @@ def day_15_count_positions_without_sensor(text_input: str, row_id: int) -> int:
 
 def day_15_find_single_blind_spot(all_text: str) -> lib.Point:
     space = day_15_load_sensor_beacon_data(all_text)
-    """Think it will be a point where there are at least four corners or intersections
-        within one or two manhattan distance, surrounding it"""
-    return lib.Point(0, 0)
+    """It will be a point where there are at least four intersections
+        of the lines just out of reach by the sensors"""
+    all_intersections = []
+    for ki, sensor in enumerate(space.keys()):
+        for other_sensor in [*space.keys()][ki + 1:]:
+            new_intersections = day_15_find_periphery_intersections(sensor,
+                                                                    other_sensor, space)
+            all_intersections += new_intersections
+    print(f"There are {len(all_intersections)} intersections in total")
+    candidates = set(filter(lambda pt: all_intersections.count(pt) >= 2, all_intersections))
+    print(f"Possible candidates: {candidates}")
+    for c in candidates:
+        if day_15_point_is_not_reached_by_any_sensor(space, c):
+            print(f"returning a point that is not reachable: {c}")
+            return c
+    return lib.Point(0, 0) #max(all_intersections, key=lambda i: all_intersections.count(i))
+
+
+def day_15_find_periphery_intersections(sensor_1: lib.Point, sensor_2: lib.Point,
+                                        space: dict) -> [lib.Point]:
+    """solve simultaneous equations for the just-unreachable lines of each of two
+        points, to see at which points, if any, they intersect.  Solution could include
+        a line of overlapping points if the line gradient is the same"""
+    search_width = 4_000_000 if len(space) > 15 else 20
+    crossings = []
+    s1_params, s2_params = (day_15_get_gradients_and_intercepts(s, space[s])
+                            for s in (sensor_1, sensor_2))
+    visible_widths = {pt: lib.manhattan_distance(pt, space[pt])
+                      for pt in (sensor_1, sensor_2)}
+    smaller_sensor = min(visible_widths.keys(), key=lambda k: visible_widths[k])
+    larger_sensor = [*filter(lambda k: k is not smaller_sensor, visible_widths.keys())][0]
+    min_vis_width = visible_widths[smaller_sensor]
+    for index, param in enumerate(s1_params):
+        higher_intercept = index % 2
+        min_x = smaller_sensor.x - min_vis_width - 1 if higher_intercept else smaller_sensor.x
+        max_x = smaller_sensor.x if higher_intercept else smaller_sensor.x + min_vis_width + 1
+        min_y = smaller_sensor.y if higher_intercept else smaller_sensor.y - min_vis_width - 1
+        max_y = smaller_sensor.y + min_vis_width + 1 if higher_intercept else smaller_sensor.y
+        min_larger_x = larger_sensor.x - visible_widths[larger_sensor] - 1 \
+            if higher_intercept else larger_sensor.x
+        max_larger_x = larger_sensor.x if higher_intercept else \
+            larger_sensor.x + visible_widths[larger_sensor] + 1
+        g1, i1 = param
+        for s2_index, params in enumerate(s2_params):
+            g2, i2 = params
+            if g1 == g2:
+                pass
+                # if i1 == i2 and (s2_index % 2 != index % 2):
+                #     min_overlap = max(0, min_x, min_larger_x)
+                #     max_overlap = min(search_width, max_x, max_larger_x)
+                #     if max_overlap >= min_overlap:
+                #         print(f"Sensor at {sensor_1} of size {visible_widths[sensor_1]} "
+                #               f"might overlap with that at {sensor_2} of size "
+                #               f"{visible_widths[sensor_2]}")
+                #         print(f"Size of overlap is {max_overlap - min_overlap}")
+                #         for trial_x in range(min_overlap, max_overlap + 1):
+                #             trial_point = lib.Point(trial_x, (g1 * trial_x) + i1)
+                #             if day_15_point_is_not_reached_by_any_sensor(space, trial_point):
+                #                 print(f"{trial_point} is LOOKING GOOD!")
+                #                 crossings.append(trial_point)
+            else:
+                # assuming that an unreachable point has to be on
+                # at least two perpendicular intersections
+                """simultaneous equations to solve:
+                        o-  y = g1x + i1
+                        o-  y = g2x + i2
+                        
+                        (g1 -g2)x = i2 - i1
+                        x = (i2 - i1) / (g1 - g2)"""
+                x = (i2 - i1) / (g1 - g2)
+                y = (g1 * x) + i1
+                assert y == (g2 * x) + i2
+                if 0 <= x <= search_width and 0 <= y <= search_width:
+                    if min_x <= x <= max_x:# and min_y <= y <= max_y:
+                        crossings.append(lib.Point(x, y))
+    return crossings
 
 
 def day_15_get_gradients_and_intercepts(sensor_location: lib.Point,
                                         nearest_beacon: lib.Point) -> [(int,)]:
     s_x, s_y = sensor_location
     beacon_distance = lib.manhattan_distance(sensor_location, nearest_beacon)
-    return [(1, s_y - s_x - beacon_distance), (1, s_y - s_x + beacon_distance),
-            (-1, s_x + s_y - beacon_distance), (-1, s_x + s_y + beacon_distance)]
-
-
-def day_15_get_all_just_unreachable_points(sensor_location: lib.Point,
-                                           nearest_beacon: lib.Point) -> [lib.Point]:
-    beacon_distance = lib.manhattan_distance(sensor_location, nearest_beacon)
-    s_x, s_y = sensor_location
-    return [lib.Point(s_x - beacon_distance - 1 + x, s_y + x)
-            for x in range(beacon_distance + 1)] + \
-           [lib.Point(s_x + x + 1, s_y - beacon_distance + x)
-            for x in range(beacon_distance + 1)] + \
-           [lib.Point(s_x - beacon_distance + x, s_y - 1 - x)
-            for x in range(beacon_distance + 1)] + \
-           [lib.Point(s_x + x, s_y + beacon_distance + 1 - x)
-            for x in range(beacon_distance + 1)]
+    return [(1, s_y - s_x - beacon_distance - 1), (1, s_y - s_x + beacon_distance + 1),
+            (-1, s_x + s_y - beacon_distance - 1), (-1, s_x + s_y + beacon_distance + 1)]
 
 
 def day_15_get_corners(sensor_location: lib.Point, nearest_beacon: lib.Point) -> [lib.Point]:
