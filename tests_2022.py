@@ -1,5 +1,152 @@
 import aoc_2022
 import library as lib
+import pytest
+import pprint
+
+
+class TestDay16:
+    example = """Valve AA has flow rate=0; tunnels lead to valves DD, II, BB
+Valve BB has flow rate=13; tunnels lead to valves CC, AA
+Valve CC has flow rate=2; tunnels lead to valves DD, BB
+Valve DD has flow rate=20; tunnels lead to valves CC, AA, EE
+Valve EE has flow rate=3; tunnels lead to valves FF, DD
+Valve FF has flow rate=0; tunnels lead to valves EE, GG
+Valve GG has flow rate=0; tunnels lead to valves FF, HH
+Valve HH has flow rate=22; tunnel leads to valve GG
+Valve II has flow rate=0; tunnels lead to valves AA, JJ
+Valve JJ has flow rate=21; tunnel leads to valve II"""
+
+    @pytest.fixture
+    def eg_valve_data(self):
+        return aoc_2022.day_16_load_valve_data(self.example)
+
+    def test_setup(self):
+        valves = aoc_2022.day_16_load_valve_data(self.example)
+        assert len(valves) == 10
+        assert valves["JJ"] == (21, ["II"])
+        assert valves["EE"] == (3, ["FF", "DD"])
+
+    def test_journey_scoring(self, eg_valve_data):
+        with open("inputs_2022\\day16example_desc.txt", "r") as file:
+            text = file.read()
+        minutes = text.split("\n\n")
+        moves = [mn.split("\n")[2][-3:-1] for mn in minutes if mn.count("\n") == 2]
+        assert aoc_2022.day_16_score_journey([], eg_valve_data) == 0
+        assert aoc_2022.day_16_score_journey(["AA", "BB", "CC"], eg_valve_data) == 0
+        assert aoc_2022.day_16_score_journey(["BB", "BB", "CC", "CC"], eg_valve_data) == 364 + 52
+        assert aoc_2022.day_16_score_journey(["DD", "DD"], eg_valve_data) == 20 * 28
+        assert aoc_2022.day_16_score_journey(moves, eg_valve_data) == 1651
+
+    def test_exploring_actual_input(self):
+        valve_data = aoc_2022.day_16_load_valve_data(aoc_2022.Puzzle22(16).get_text_input())
+        assert len(valve_data) == 59
+        print(f"\nThere are {len([v for v in valve_data.values() if v[0] > 0])} "
+              f"valves with a non-zero flow rate")
+
+    def test_distances_table(self, eg_valve_data):
+        assert aoc_2022.day_16_get_shortest_distance_between("AA", "BB", eg_valve_data) == 1
+        assert aoc_2022.day_16_get_shortest_distance_between("AA", "CC", eg_valve_data) == 2
+        distances = aoc_2022.day_16_build_distances_table(eg_valve_data)
+        print(distances)
+        assert distances["DD"]["JJ"] == 3
+        assert distances["JJ"]["HH"] == 7
+        assert distances["DD"]["JJ"] == distances["JJ"]["DD"]
+        assert distances["AA"]["DD"] == 1
+        assert len(distances) == 7
+        assert all([len(distances[row]) == 6 for row in distances])
+        for k in distances.keys():
+            with pytest.raises(KeyError):
+                print(distances[k][k])
+        print("Building distances table for the big input . . .")
+        big_table = aoc_2022.day_16_build_distances_table(aoc_2022.day_16_load_valve_data(aoc_2022.Puzzle22(16).get_text_input()))
+        big_rows = len(big_table)
+        print(f"The big table has {big_rows} rows")
+        assert big_rows == 16
+        assert "AA" in big_table
+        # pprint.pprint(big_table)
+
+    def test_brute_force_with_worthwhile_points(self, eg_valve_data):
+        aoc_2022.day_16_route_table = aoc_2022.day_16_build_distances_table(eg_valve_data)
+        valid_routes = aoc_2022.day_16_get_all_valid_routes
+        assert valid_routes([""] * 30) == [[""] * 30]
+        assert valid_routes([""] * 27 + ["AA"]) == [[""] * 27 + ["AA"]]
+        assert valid_routes(["BB", "BB"] + [""] * 24 + ["CC"]) == \
+               [["BB", "BB"] + [""] * 24 + ["CC"] + ["DD", "DD"]]
+        stem = [""] * 26 + ["AA"]
+        assert valid_routes(stem) == [stem + ["BB", "BB"], stem + ["DD", "DD"]]
+        all_routes = valid_routes([])
+        print(f"There are {len(all_routes)} valid routes in the example")
+        print(f"Solution could be "
+              f"{max([aoc_2022.day_16_score_journey(r, eg_valve_data) for r in all_routes])}")
+        print(f"That is "
+              f"{max(all_routes, key=lambda r: aoc_2022.day_16_score_journey(r, eg_valve_data))}")
+
+    def test_part_one(self, eg_valve_data):
+        aoc_2022.day_16_route_table = aoc_2022.day_16_build_distances_table(eg_valve_data)
+        assert aoc_2022.day_16_by_traversal_of_all_routes_between_worthwhile_points(self.example) == 1651
+        solution = aoc_2022.day_16_part_one()
+        assert solution < 1897  # first incorrect attempt
+        lib.verify_solution(solution, 1789)
+
+    def test_scoring_double_headed_journeys(self, eg_valve_data):
+        method = aoc_2022.day_16_score_double_headed_journey
+        assert method([[], []], eg_valve_data) == 0
+        j1 = [["DD", "DD"], []]
+        assert method(j1, eg_valve_data) == 480
+        j2 = [[""] * 8 + ["EE", "EE"], ["DD", "DD"]]
+        assert method(j2, eg_valve_data) == 480 + 48
+        with open("inputs_2022\\day16eg2.txt") as eg_file:
+            text = eg_file.readlines()
+        my_journey, elephant_journey = [], []
+        for line in text:
+            match line[:4]:
+                case "You ":
+                    my_journey.append(line[-4:-2])
+                case "The ":
+                    elephant_journey.append(line[-4:-2])
+        best_eg_journey = [my_journey, elephant_journey]
+        assert method(best_eg_journey, eg_valve_data) == 1707
+
+    def test_double_headed_route_finding(self, eg_valve_data):
+        aoc_2022.day_16_route_table = aoc_2022.day_16_build_distances_table(eg_valve_data)
+        test_method = aoc_2022.day_16_get_all_valid_team_routes
+
+        def blanks(n_empties: int) -> [str]:
+            return [""] * n_empties
+        me_stem, e_stem = blanks(23) + ["BB"], blanks(23) + ["CC"]
+        assert test_method([me_stem, e_stem]) == [[me_stem, e_stem]]    # short of time
+        me_stem, e_stem = blanks(22) + ["CC"], blanks(22) + ["DD"]
+        assert test_method([me_stem, e_stem]) == [[me_stem + ["BB", "BB"],  # only one
+                                                   e_stem + ["EE", "EE"]]]  # option each
+        more_options = test_method([["BB", "CC"], ["DD", "EE"]])
+        assert len(more_options) > 1
+        assert len(more_options) == 2
+        pprint.pprint(more_options)
+        extended_options = test_method([["BB"], ["DD"]])
+        assert len(extended_options) > 2
+        # pprint.pprint(extended_options)
+        # for xe in extended_options:
+        #     xe = [[*filter(lambda s: len(s) > 0, el)] for el in xe]
+        #     print(xe)
+        #     overlap = set(xe[0]).intersection(set(xe[1]))
+        #     assert len(overlap) == 0
+        # test for unequal options because in example, each player always has same no. (?)
+        unequal_options = test_method([["", "", "BB"],
+                                       ["CC", "DD", "EE"] + blanks(21) + ["HH"]])
+        assert len(unequal_options) == 1
+        assert unequal_options[0][0] == ["", "", "BB"] + blanks(2) + ["JJ", "JJ"]
+        assert unequal_options[0][1] == ["CC", "DD", "EE"] + blanks(21) + ["HH"]
+        no_options = test_method([["CC", "DD", "EE"], ["BB", "HH", "JJ"]])
+        assert no_options == [[["CC", "DD", "EE"], ["BB", "HH", "JJ"]]]
+
+    def test_part_two(self, eg_valve_data):
+        aoc_2022.day_16_route_table = aoc_2022.day_16_build_distances_table(eg_valve_data)
+        eg_solution = aoc_2022.day_16_by_teaming_up_with_elephant(self.example)
+        assert eg_solution == 1707
+        # lib.verify_solution(aoc_2022.day_16_part_two(), part_two=True)
+        # TODO: passes with example, but runs forever with real input
+        #       am I checking too many routes?
+
 
 
 class TestDay15:
@@ -35,34 +182,30 @@ Sensor at x=20, y=1: closest beacon is at x=15, y=3
         data = aoc_2022.day_15_load_sensor_beacon_data(self.example)
         assert not aoc_2022.day_15_point_is_not_reached_by_any_sensor(data, lib.Point(0, 0))
         assert aoc_2022.day_15_point_is_not_reached_by_any_sensor(data, lib.Point(14, 11))
-        # print(aoc_2022.day_15_get_corners(lib.Point(8, 7), lib.Point(2, 10)))
         assert aoc_2022.day_15_get_gradients_and_intercepts(lib.Point(8, 7),
                                                             lib.Point(2, 10)) == \
                [(1, -11), (1, 9), (-1, 5), (-1, 25)]
         assert aoc_2022.day_15_get_gradients_and_intercepts(lib.Point(9, 16),
                                                             lib.Point(10, 16)) == \
                [(1, 5), (1, 9), (-1, 23), (-1, 27)]
+        assert aoc_2022.day_15_get_gradients_and_intercepts(lib.Point(0, 0),
+                                                            lib.Point(5, 0)) == \
+               [(1, -6), (1, 6), (-1, -6), (-1, 6)]
+        assert aoc_2022.day_15_get_gradients_and_intercepts(lib.Point(5, 0),
+                                                            lib.Point(0, 0)) == \
+               [(1, -11), (1, 1), (-1, -1), (-1, 11)]
         intersections = aoc_2022.day_15_find_periphery_intersections(lib.Point(8, 7),
                                                                     lib.Point(9, 16), data)
         print(intersections)
-        all_intersections = []
-        for ki, sensor in enumerate(data.keys()):
-            print(sensor)
-            for other_sensor in [*data.keys()][ki + 1:]:
-                new_intersections = aoc_2022.day_15_find_periphery_intersections(sensor,
-                                                                                 other_sensor,
-                                                                                 data)
-                # print(f"Found {len(new_intersections)} new intersections: {new_intersections}")
-                all_intersections += new_intersections
-        print(f"There are {len(all_intersections)} intersections in total")
-        winner = max(all_intersections, key=lambda i: all_intersections.count(i))
-        print(f"Our point is {winner}, with {all_intersections.count(winner)} intersections")
-        assert aoc_2022.day_15_find_single_blind_spot(self.example) == lib.Point(14, 11)
-        assert (winner.x * 4_000_000) + winner.y == 56000011
+        result = aoc_2022.day_15_find_single_blind_spot(self.example)
+        assert result == lib.Point(14, 11)
+        assert aoc_2022.day_15_tuning_frequency(result) == 56000011
 
     def test_part_two(self):
-        lib.verify_solution(aoc_2022.day_15_part_two(), part_two=True)
-        # 2110003570473 is too low
+        answer = aoc_2022.day_15_part_two()
+        assert answer > 2110007570474
+        lib.verify_solution(answer, 13267474686239, part_two=True)
+        # 2110007570474 is too low
 
 
 class TestDay14:

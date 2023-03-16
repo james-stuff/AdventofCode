@@ -1,5 +1,7 @@
 from main import Puzzle
 import library as lib
+from collections import defaultdict
+from itertools import product
 
 
 class Puzzle22(Puzzle):
@@ -8,13 +10,197 @@ class Puzzle22(Puzzle):
             return input_file.read()
 
 
+day_16_route_table = {}
+
+
+def day_16_part_one() -> int:
+    global day_16_route_table
+    text = Puzzle22(16).get_text_input()
+    day_16_route_table = day_16_build_distances_table(day_16_load_valve_data(text))
+    return day_16_by_traversal_of_all_routes_between_worthwhile_points(text)
+
+
+def day_16_part_two() -> int:
+    global day_16_route_table
+    text = Puzzle22(16).get_text_input()
+    day_16_route_table = day_16_build_distances_table(day_16_load_valve_data(text))
+    return day_16_by_teaming_up_with_elephant(text)
+
+
+def day_16_by_traversal_of_all_routes_between_worthwhile_points(input_text: str) -> int:
+    valve_data = day_16_load_valve_data(input_text)
+    routes = day_16_get_all_valid_routes([])
+    print(f"{len(routes):,} routes found")
+    return max([day_16_score_journey(r, valve_data) for r in routes])
+
+
+def day_16_by_teaming_up_with_elephant(input_text: str) -> int:
+    valves = day_16_load_valve_data(input_text)
+    routes = day_16_get_all_valid_team_routes([[], []])
+    print(f"{len(routes):,} routes found")
+    return max([day_16_score_double_headed_journey(r, valves) for r in routes])
+
+
+def day_16_get_all_valid_team_routes(routes_so_far: [[str]]) -> [[[str]]]:
+    """as day_16_get_all_valid_routes() except:
+            - total time available is only 26 minutes (so must get to tap in <25 mins)
+            - must rule out already-visited taps in EITHER of two lists per route"""
+    def extend_route(existing_route: [str], next_step: str) -> [str]:
+        if next_step == "":
+            return existing_route
+        location = existing_route[-1] if existing_route else "AA"
+        distance = day_16_route_table[location][next_step]
+        return existing_route + ([""] * (distance - 1)) + ([next_step] * 2)
+
+    current_locations = [r[-1] if r else "AA" for r in routes_so_far]
+    possible_next_steps = []
+    for i, player_route in enumerate(routes_so_far):
+        other_route = routes_so_far[int(not i)]
+        assert player_route is not other_route
+        neighbours = day_16_route_table[current_locations[i]]
+        options = [k for k, v in neighbours.items()
+                   if len(player_route) + v < 25
+                   and k != "AA"
+                   and k not in player_route
+                   and k not in other_route]
+        if not options:
+            options = [""]
+        possible_next_steps.append(options)
+    possible_routes = []
+    valid_choices = [p for p in product(*possible_next_steps)
+                     if (p[0] != p[1])]
+    if valid_choices:
+        for choice in valid_choices:
+            next_routes = [extend_route(r, c) for r, c in zip(routes_so_far, choice)]
+            possible_routes += day_16_get_all_valid_team_routes(next_routes)
+        return possible_routes
+    return [routes_so_far]
+
+
+def day_16_get_all_valid_routes(route_so_far: [str]) -> [[str]]:
+    """recursively find all routes that can turn on taps with non-zero flow
+    rates that will be effective within the 30 minutes, without revisiting
+    the origin, or taps that are already on"""
+    # print(f"Looking at {route_so_far}")
+    current_location = route_so_far[-1] if route_so_far else "AA"
+    routes = day_16_route_table[current_location]
+    options = [k for k, v in routes.items()
+               if len(route_so_far) + v < 29
+               and k not in route_so_far
+               and k != "AA"]
+    # print(f"Options are: {options}")
+    if options:
+        possible_routes = []
+        for o in options:
+            distance = day_16_route_table[current_location][o] - 1
+            possible_routes += day_16_get_all_valid_routes(route_so_far +
+                                                           [""] * distance + [o] * 2)
+        return possible_routes
+    return [route_so_far]
+
+
+def day_16_by_finding_best_valve_at_the_time(input_text: str) -> int:
+    """didn't work, unsurprisingly (although answer was of the right kind of magnitude)"""
+    valves = day_16_load_valve_data(input_text)
+    distances = day_16_build_distances_table(valves)
+    minutes_elapsed = 0
+    route = []
+    location = "AA"
+
+    def score_next_move(dest: str) -> int:
+        potential_flow_mins = 30 - minutes_elapsed - 1 - distances[location][dest]
+        return valves[dest][0] * potential_flow_mins
+
+    print(f"\nI'm starting at {location}")
+    while minutes_elapsed < 30:
+        best_valve = max(distances[location].keys(), key=lambda loc: score_next_move(loc))
+        distance_to_move = distances[location][best_valve]
+        if valves[best_valve][0] > 0:
+            route += [""] * (distance_to_move - 1) + [best_valve] * 2
+            minutes_elapsed += 1
+        minutes_elapsed += distance_to_move
+        location = best_valve
+        valves[location] = (0, valves[location][1])
+    return day_16_score_journey(route, day_16_load_valve_data(input_text))
+
+
+def day_16_build_distances_table(valve_data: dict) -> dict:
+    table = defaultdict(defaultdict)
+    useful_valves = ["AA"] + [*filter(lambda vd: valve_data[vd][0] > 0, valve_data)]
+    # print(f"Useful valves are {useful_valves}")
+    for i, v in enumerate(useful_valves):
+        for other_valve in useful_valves[i + 1:]:
+            distance = day_16_get_shortest_distance_between(v, other_valve, valve_data)
+            table[v][other_valve] = distance
+            table[other_valve][v] = distance
+    return table
+
+
+def day_16_get_shortest_distance_between(origin: str, destination: str,
+                                         valves: dict) -> int:
+    """uses Djikstra algorithm"""
+    assert all(isinstance(loc, str) and len(loc) == 2 for loc in (origin, destination))
+    all_valves = [*valves.keys()]
+    distances = {valve: 1_000_000 for valve in all_valves}
+    distances[origin] = 0
+    while all_valves:
+        this_point = min(all_valves, key=lambda v: distances[v])
+        _, neighbours = valves[this_point]
+        for np in neighbours:
+            n_from_start = distances[this_point] + 1
+            if n_from_start < distances[np]:
+                distances[np] = n_from_start
+        if this_point == destination:
+            break
+        all_valves.remove(this_point)
+    # print(distances)
+    return distances[destination]
+
+
+def day_16_score_double_headed_journey(journey: [[str]], valve_data: {}) -> int:
+    return sum(day_16_score_journey(j, valve_data, time_available=26) for j in journey)
+
+
+def day_16_score_journey(journey: [str], valve_data: {},
+                         time_available: int = 30) -> int:
+    """a journey is represented as a sequence of locations visited.
+    If one of these has a non-zero flow rate, it is repeated to represent
+    the extra minute taken to turn on the tap.  Zero-flow locations can be
+    represented as empty strings"""
+    total_flow = 0
+    for i, location in enumerate(journey):
+        if i > 0 and location and location == journey[i - 1]:
+            flow_duration_mins = time_available - (i + 1)
+            flow_rate, _ = valve_data[location]
+            total_flow += flow_rate * flow_duration_mins
+    return total_flow
+
+
+def day_16_load_valve_data(all_text: str) -> dict:
+    def get_data(valve_text: str) -> (str, int):
+        rate_text, _, options_text = valve_text.partition(";")
+        valve_id = rate_text[6:8]
+        rate = int(rate_text[rate_text.index("=") + 1:])
+        options = [options_text[-2:]]
+        if "," in options_text:
+            options = options_text[options_text.index(",") - 2:].split(", ")
+        return valve_id, tuple((rate, options))
+
+    valve_data = {}
+    for line in all_text.split("\n"):
+        if line:
+            valve, data = get_data(line)
+            valve_data[valve] = data
+    return valve_data
+
+
 def day_15_part_one() -> int:
     return day_15_count_positions_without_sensor(Puzzle22(15).get_text_input(), 2_000_000)
 
 
 def day_15_part_two() -> int:
     blind_spot = day_15_find_single_blind_spot(Puzzle22(15).get_text_input())
-    return (blind_spot.x * 4_000_000) + blind_spot.y
+    return day_15_tuning_frequency(blind_spot)
 
 
 def day_15_load_sensor_beacon_data(all_text: str) -> dict:
@@ -34,8 +220,7 @@ def day_15_count_positions_without_sensor(text_input: str, row_id: int) -> int:
     known_empty_x = set()
     for sensor, nearest_beacon in positions.items():
         search_radius = lib.manhattan_distance(sensor, nearest_beacon)
-        row_intersection = lib.Point(sensor.x, row_id)
-        distance_to_row = lib.manhattan_distance(sensor, row_intersection)
+        distance_to_row = abs(sensor.y - row_id)
         if distance_to_row <= search_radius:
             visible_x_on_row = [*range(sensor.x - search_radius + distance_to_row,
                                        sensor.x + search_radius - distance_to_row + 1)]
@@ -44,6 +229,7 @@ def day_15_count_positions_without_sensor(text_input: str, row_id: int) -> int:
 
 
 def day_15_find_single_blind_spot(all_text: str) -> lib.Point:
+    from collections import Counter
     space = day_15_load_sensor_beacon_data(all_text)
     """It will be a point where there are at least four intersections
         of the lines just out of reach by the sensors"""
@@ -54,13 +240,23 @@ def day_15_find_single_blind_spot(all_text: str) -> lib.Point:
                                                                     other_sensor, space)
             all_intersections += new_intersections
     print(f"There are {len(all_intersections)} intersections in total")
-    candidates = set(filter(lambda pt: all_intersections.count(pt) >= 2, all_intersections))
+    winner = max(all_intersections, key=lambda i: all_intersections.count(i))
+    print(f"{winner} has {all_intersections.count(winner)} intersections")
+
+    ctr = Counter(all_intersections)
+    print(f"Most common from Counter: {ctr.most_common(3)}")
+    counter_winner = ctr.most_common(1)
+    print(f"Counter winner: {counter_winner[0][0]}")
+    if len(all_intersections) > 200:
+        assert counter_winner[0][0] == lib.Point(x=527501.0, y=3570474.0)
+
+    candidates = set(filter(lambda pt: all_intersections.count(pt) >= 3, all_intersections))
     print(f"Possible candidates: {candidates}")
     for c in candidates:
         if day_15_point_is_not_reached_by_any_sensor(space, c):
             print(f"returning a point that is not reachable: {c}")
             return c
-    return lib.Point(0, 0) #max(all_intersections, key=lambda i: all_intersections.count(i))
+    return max(all_intersections, key=lambda i: all_intersections.count(i))
 
 
 def day_15_find_periphery_intersections(sensor_1: lib.Point, sensor_2: lib.Point,
@@ -75,37 +271,19 @@ def day_15_find_periphery_intersections(sensor_1: lib.Point, sensor_2: lib.Point
     visible_widths = {pt: lib.manhattan_distance(pt, space[pt])
                       for pt in (sensor_1, sensor_2)}
     smaller_sensor = min(visible_widths.keys(), key=lambda k: visible_widths[k])
-    larger_sensor = [*filter(lambda k: k is not smaller_sensor, visible_widths.keys())][0]
     min_vis_width = visible_widths[smaller_sensor]
     for index, param in enumerate(s1_params):
         higher_intercept = index % 2
-        min_x = smaller_sensor.x - min_vis_width - 1 if higher_intercept else smaller_sensor.x
-        max_x = smaller_sensor.x if higher_intercept else smaller_sensor.x + min_vis_width + 1
-        min_y = smaller_sensor.y if higher_intercept else smaller_sensor.y - min_vis_width - 1
-        max_y = smaller_sensor.y + min_vis_width + 1 if higher_intercept else smaller_sensor.y
-        min_larger_x = larger_sensor.x - visible_widths[larger_sensor] - 1 \
-            if higher_intercept else larger_sensor.x
-        max_larger_x = larger_sensor.x if higher_intercept else \
-            larger_sensor.x + visible_widths[larger_sensor] + 1
+        min_x, max_x = (smaller_sensor.x for _ in range(2))
         g1, i1 = param
+        if (g1 > 0 and higher_intercept) or (g1 < 0 and not higher_intercept):
+            min_x = max_x - min_vis_width - 1
+        if (g1 > 0 and not higher_intercept) or (g1 < 0 and higher_intercept):
+            max_x = min_x + min_vis_width + 1
+        assert min_x != max_x
         for s2_index, params in enumerate(s2_params):
             g2, i2 = params
-            if g1 == g2:
-                pass
-                # if i1 == i2 and (s2_index % 2 != index % 2):
-                #     min_overlap = max(0, min_x, min_larger_x)
-                #     max_overlap = min(search_width, max_x, max_larger_x)
-                #     if max_overlap >= min_overlap:
-                #         print(f"Sensor at {sensor_1} of size {visible_widths[sensor_1]} "
-                #               f"might overlap with that at {sensor_2} of size "
-                #               f"{visible_widths[sensor_2]}")
-                #         print(f"Size of overlap is {max_overlap - min_overlap}")
-                #         for trial_x in range(min_overlap, max_overlap + 1):
-                #             trial_point = lib.Point(trial_x, (g1 * trial_x) + i1)
-                #             if day_15_point_is_not_reached_by_any_sensor(space, trial_point):
-                #                 print(f"{trial_point} is LOOKING GOOD!")
-                #                 crossings.append(trial_point)
-            else:
+            if g1 != g2:
                 # assuming that an unreachable point has to be on
                 # at least two perpendicular intersections
                 """simultaneous equations to solve:
@@ -118,7 +296,7 @@ def day_15_find_periphery_intersections(sensor_1: lib.Point, sensor_2: lib.Point
                 y = (g1 * x) + i1
                 assert y == (g2 * x) + i2
                 if 0 <= x <= search_width and 0 <= y <= search_width:
-                    if min_x <= x <= max_x:# and min_y <= y <= max_y:
+                    if min_x <= x <= max_x:
                         crossings.append(lib.Point(x, y))
     return crossings
 
@@ -145,6 +323,10 @@ def day_15_point_is_not_reached_by_any_sensor(space: dict, point: lib.Point) -> 
                 lib.manhattan_distance(sensor, space[sensor]):
             return False
     return True
+
+
+def day_15_tuning_frequency(point: lib.Point) -> int:
+    return int((point.x * 4_000_000) + point.y)
 
 
 day_14_infinite_floor_level = 0
@@ -255,7 +437,6 @@ def day_13_insert_markers(all_text: str) -> int:
                                    day_13_order_is_correct([[6]], pr) == (True, True),
                                    packets)])
     return (packets_before_2 + 1) * (total_packets - packets_after_6 + 2)
-
 
 
 def day_13_get_sum_of_indices_of_correctly_ordered_pairs(text_input: str) -> int:
@@ -408,22 +589,21 @@ def day_12_dijkstra_shortest_distance(start: lib.Point) -> int:
     end = day_12_find_terminus(False)
     distances[start] = 0
     while all_points:
-        next_point = min(all_points, key=lambda p: distances[p])
-        neighbours = day_12_get_valid_options(next_point)
+        this_point = min(all_points, key=lambda p: distances[p])
+        neighbours = day_12_get_valid_options(this_point)
         for np in neighbours:
-            n_from_start = distances[next_point] + 1
+            n_from_start = distances[this_point] + 1
             if n_from_start < distances[np]:
                 distances[np] = n_from_start
-        if next_point == end:
+        if this_point == end:
             break
-        all_points.remove(next_point)
+        all_points.remove(this_point)
     return distances[end]
 
 
 def day_12_get_valid_options(here: lib.Point) -> [lib.Point]:
-    not_too_high = lambda destination: day_12_get_spot_height(destination) <=\
-                                       day_12_get_spot_height(here) + 1
-    return [*filter(lambda loc: not_too_high(loc),
+    return [*filter(lambda loc: day_12_get_spot_height(loc) <=
+                                day_12_get_spot_height(here) + 1,
                     lib.get_neighbours_in_grid(here, day_12_grid))]
 
 
