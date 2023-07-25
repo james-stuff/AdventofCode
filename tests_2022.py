@@ -4,6 +4,123 @@ import pytest
 import pprint
 
 
+class TestDay17:
+    example_jets = ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>"   # len = 40
+
+    def test_load(self):
+        rock_cycle = aoc_2022.day_17_load_rocks()
+        five_rocks = [next(rock_cycle) for _ in range(5)]
+        assert len(five_rocks) == 5
+        print(f"Rock widths: {', '.join(str(rock.width) for rock in five_rocks)}")
+        assert [rock.width for rock in five_rocks] == [4, 3, 3, 1, 2]
+        jet_cycle = aoc_2022.day_17_load_jets(self.example_jets)
+        jets = [next(jet_cycle) for _ in range(60)]
+        assert jets[7] == ">"
+        assert "".join(jets[41:50]) == ">><<><>><"
+        # full_cycle = aoc_2022.day_17_load_jets()
+        # real_jets = [next(full_cycle) for _ in range(20000)]
+
+    def test_horizontal_moves(self):
+        base_rocks = aoc_2022.day_17_load_rocks()
+        our_rock = next(base_rocks)
+        our_rock.bottom_y = 4
+        our_rock.move_horizontally(">")
+        assert our_rock.left_x == 4
+        for _ in range(10):
+            our_rock.move_horizontally(">")
+            assert our_rock.left_x == 4
+        our_rock.move_horizontally("<")
+        assert our_rock.left_x == 3
+        for _ in range(2):
+            expected_x = our_rock.left_x - 1
+            our_rock.move_horizontally("<")
+            assert our_rock.left_x == expected_x
+        for _ in range(10):
+            our_rock.move_horizontally("<")
+            assert our_rock.left_x == 1
+
+    def test_downward_move_hits_bottom(self):
+        rock = next(aoc_2022.day_17_load_rocks())
+        rock.bottom_y = 2
+        for _ in range(10):
+            rock.move_down()
+            assert rock.bottom_y == 1
+        rock.settle()
+
+    def test_collision_detection(self):
+        cyclical_rocks = aoc_2022.day_17_load_rocks()
+        first_three_rocks = [next(cyclical_rocks) for _ in range(3)]
+        rock_1, rock_2 = (first_three_rocks[r] for r in (1, 2))
+        first_rock = first_three_rocks[0]
+        first_rock.bottom_y = 1
+        first_rock.settle()
+        aoc_2022.day_17_stationary_rocks = [rock_1]
+        rock_1.bottom_y = 2
+        rock_1.settle()
+        rock_2.bottom_y = 6
+        rock_2.move_down()
+        assert rock_2.bottom_y == 5
+        rock_2.settle()
+        rock_2.move_down()
+        assert rock_2.bottom_y == 5
+
+    def test_rockfall(self):
+        assert aoc_2022.day_17_run_simulation(self.example_jets, 6) == 10
+        assert aoc_2022.day_17_testing_count_hashes() == 26
+        assert aoc_2022.day_17_run_simulation(self.example_jets, 10) == 17
+        assert aoc_2022.day_17_run_simulation(self.example_jets) == 3068
+        # print("\n".join(aoc_2022.day_17_cavern[::-1]))
+
+    def test_debug_part_one(self):
+        """This helped show that after a small number of rocks,
+            the number of hashes in the cavern was not as expected,
+            indicating that an empty part of a falling rock
+            was sometimes overwriting an existing rock particle
+            LESSON: think of everything you possibly can to test early on
+            - could easily have spotted this with a simple test"""
+        aoc_2022.day_17_run_simulation(self.example_jets, 22)
+        print("\n".join(aoc_2022.day_17_cavern[::-1]))
+
+    def test_part_one(self):
+        proposed_solution = aoc_2022.day_17_part_one()
+        # print("\n".join(aoc_2022.day_17_cavern[::-1]))
+        lib.verify_solution(proposed_solution, 3239)
+
+    def _exploratory_stuff_for_part_two(self):
+        # does the pattern of rocks repeat itself?
+        big_number = 1_000_000_000_000
+        period = 2_783
+        rocks_before_start = big_number % period
+        print(f"Do {rocks_before_start} rows ")
+        aoc_2022.day_17_run_simulation(self.example_jets, how_many_times=12_000)
+        print("Simulation has run")
+        cavern = aoc_2022.day_17_cavern
+        random_rows = cavern[5000:5020]
+
+        def match_bunch_of_rows(start_row: int) -> bool:
+            for i, row in enumerate(random_rows):
+                if cavern[start_row + i] != row:
+                    return False
+            return True
+
+        for row_id in range(15_000):
+            if row_id % 1_000 == 0:
+                print(f"Looking at row {row_id}")
+            if match_bunch_of_rows(row_id):
+                print(f"Pattern repeats from row {row_id}")
+        """Found repetitions of the 20-row segment at:
+            (16132, 18915, 21698, 24481, 27264) - that is every 2,783 rows"""
+
+    def test_part_two_example(self):
+        solution = aoc_2022.day_17_height_of_trillion_rock_tower(self.example_jets)
+        assert solution == 1_514_285_714_288
+
+    def test_part_two(self):
+        proposed = aoc_2022.day_17_part_two()
+        assert proposed < 1596672403891
+        lib.verify_solution(proposed, part_two=True)
+
+
 class TestDay16:
     example = """Valve AA has flow rate=0; tunnels lead to valves DD, II, BB
 Valve BB has flow rate=13; tunnels lead to valves CC, AA

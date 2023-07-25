@@ -1,13 +1,179 @@
 from main import Puzzle
 import library as lib
 from collections import defaultdict
-from itertools import product
+from itertools import product, cycle
+from copy import deepcopy
 
 
 class Puzzle22(Puzzle):
     def get_text_input(self) -> str:
         with open(f'inputs_2022\\input{self.day}.txt', 'r') as input_file:
             return input_file.read()
+
+
+day_17_rocks = """####
+
+.#.
+###
+.#.
+
+..#
+..#
+###
+
+#
+#
+#
+#
+
+##
+##"""
+
+
+day_17_cavern = ["+-------+"]
+
+
+def day_17_part_one() -> int:
+    return day_17_run_simulation()
+
+
+def day_17_part_two() -> int:
+    return day_17_height_of_trillion_rock_tower()
+
+
+def day_17_height_of_trillion_rock_tower(test_jets: str = None) -> int:
+    repeated_rows = 53 if test_jets else 2_783
+    trillion = 1_000_000_000_000
+    """how many rocks need to fall to get to this height?
+        multiply that by the big_number // repeated_rows
+        Try this:
+            1. drop 3000 rocks and get the height
+            2. count the number of rocks that increase height by repeated_rows
+            3. divide the big number - 3000 by (2)
+            4. run the simulation the remainder number of times to
+                add on the additional height gained by dropping big number of rocks"""
+    incoming_rocks = day_17_load_rocks()
+    jet_cycle = day_17_load_jets(test_jets)
+    print("")
+    for _ in range(5_000):
+        day_17_rock_falls(jet_cycle, incoming_rocks)
+    height_after_5_000 = len(day_17_cavern) - 1
+    print(f"Height after 5,000 rocks: {height_after_5_000}")
+    rocks_per_repeat = 0
+    while len(day_17_cavern) - 1 < height_after_5_000 + repeated_rows:
+        day_17_rock_falls(jet_cycle, incoming_rocks)
+        rocks_per_repeat += 1
+    print(f"Rocks required to gain {repeated_rows} rows = {rocks_per_repeat}")
+    assert len(day_17_cavern) - 1 == height_after_5_000 + repeated_rows
+    repeats_required = (trillion - 5_000 - rocks_per_repeat) // rocks_per_repeat
+    print(f"Need to repeat {repeats_required} times")
+    rocks_dropped = 5_000 + rocks_per_repeat + (rocks_per_repeat * repeats_required)
+    height_before_final_push = len(day_17_cavern) - 1
+    for r in range(trillion - rocks_dropped):
+        day_17_rock_falls(jet_cycle, incoming_rocks)
+    return height_after_5_000 + (repeated_rows * (repeats_required + 1)) + \
+           len(day_17_cavern) - 1 - height_before_final_push
+
+
+def day_17_run_simulation(test_jets: str = None, how_many_times: int = 2022) -> int:
+    incoming_rocks = day_17_load_rocks()
+    jet_cycle = day_17_load_jets(test_jets)
+    print("")
+    for _ in range(how_many_times):
+        day_17_rock_falls(jet_cycle, incoming_rocks)
+    return len(day_17_cavern) - 1
+
+
+def day_17_rock_falls(jet_cycle: (), incoming_rocks: ()):
+    initial_hashes = day_17_testing_count_hashes()
+    falling_rock = deepcopy(next(incoming_rocks))
+    falling_rock.bottom_y = len(day_17_cavern) + 3
+    can_move = True
+    while can_move:
+        jet = next(jet_cycle)
+        # print(jet, end="")
+        falling_rock.move_horizontally(jet)
+        can_move = falling_rock.move_down()
+    falling_rock.settle()
+    assert day_17_testing_count_hashes() == initial_hashes + \
+           sum(row.count('#') for row in falling_rock.inverted_shape)
+
+
+def day_17_testing_count_hashes() -> int:
+    return sum(row.count("#") for row in day_17_cavern)
+
+
+class Day17Rock:
+    def __init__(self, representation: str):
+        self.inverted_shape = representation.split("\n")[::-1]
+        self.width = len(self.inverted_shape[0])
+        self.bottom_y = 0           # current vertical y-coordinate of the bottom row
+        self.left_x = 3             # current x-coordinate of bottom left corner
+
+    def move_horizontally(self, direction: str):
+        displacement = 1 if direction == ">" else -1
+        new_left_x = self.left_x + displacement
+        if 0 < new_left_x and new_left_x + self.width - 1 < 8:
+            self.left_x = new_left_x
+            if self.collides_with_any_rock():
+                self.left_x -= displacement
+
+    def move_down(self) -> bool:
+        """Move down one row if possible.  Return value is success or failure"""
+        if self.bottom_y > 1:  # not hit rock bottom
+            self.bottom_y -= 1
+            if self.collides_with_any_rock():
+                self.bottom_y += 1
+                return False
+            return True
+        return False
+
+    def settle(self):
+        global day_17_cavern
+
+        def modify_row(existing_row: str, new_rock_row: str) -> str:
+            modified_row = existing_row[:self.left_x]
+            overlay = ""
+            for j, c in enumerate(new_rock_row):
+                if new_rock_row[j] == "#":
+                    overlay += "#"
+                else:
+                    overlay += existing_row[self.left_x + j]
+            modified_row += overlay + existing_row[self.left_x + self.width:]
+            return modified_row
+
+        for i, row in enumerate(self.inverted_shape):
+            if self.bottom_y + i >= len(day_17_cavern):
+                day_17_cavern.append("|.......|")
+            day_17_cavern[self.bottom_y + i] = modify_row(day_17_cavern[self.bottom_y + i],
+                                                          row)
+
+    def get_top_y(self) -> int:
+        return self.bottom_y + len(self.inverted_shape) - 1
+
+    def collides_with_any_rock(self):
+        # print(f"I am a rock at ({self.left_x}, {self.bottom_y})")
+        for y in range(self.bottom_y, self.get_top_y() + 1):
+            for x in range(self.left_x, self.left_x + self.width):
+                if y in range(len(day_17_cavern)):
+                    my_sign = self.inverted_shape[y - self.bottom_y][x - self.left_x]
+                    if my_sign == "#" and day_17_cavern[y][x] == "#":
+                        return True
+        return False
+
+
+def day_17_load_rocks(reset_cavern: bool = True) -> ():
+    if reset_cavern:
+        global day_17_cavern
+        day_17_cavern = ["+-------+"]
+    return cycle([Day17Rock(r) for r in day_17_rocks.split("\n\n")])
+
+
+def day_17_load_jets(jets: str = None) -> ():
+    if not jets:
+        jets = Puzzle22(17).get_text_input().strip()
+        print(f"Length of jets = {len(jets)}")
+    return cycle(jets)
 
 
 day_16_route_table = {}
