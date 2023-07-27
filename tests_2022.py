@@ -4,6 +4,63 @@ import pytest
 import pprint
 
 
+class TestDay18:
+    example_input = """2,2,2
+1,2,2
+3,2,2
+2,1,2
+2,3,2
+2,2,1
+2,2,3
+2,2,4
+2,2,6
+1,2,5
+3,2,5
+2,1,5
+2,3,5"""
+
+    def test_surface_area_calculations(self):
+        test_pairs = {
+            "1,1,1\n": 6,
+            "1,1,1\n2,1,1": 10,
+            self.example_input: 64,
+        }
+        for given, expected in test_pairs.items():
+            cr = "\n"
+            print(f"Testing {given.replace(cr, '; ')[:30]} . . .")
+            assert aoc_2022.day_18_total_surface_area(
+                aoc_2022.day_18_get_cube_set(given)
+            ) == expected
+
+    def test_part_one(self):
+        solution = aoc_2022.day_18_part_one()
+        lib.verify_solution(solution, 4340)
+        # currently takes ~3.5sec
+
+    def test_debug_for_part_two(self):
+        # assert aoc_2022.day_18_part_two(self.example_input, 64) == 58
+        cubes = aoc_2022.day_18_get_cube_set(self.example_input)
+        assert aoc_2022.day_18_find_all_empty_regions(7, cubes)[1] == {(2, 2, 5)}
+        minimum_enclosing_cubes = """2,2,4
+2,2,6
+1,2,5
+3,2,5
+2,1,5
+2,3,5"""
+        min_cubes = aoc_2022.day_18_get_cube_set(minimum_enclosing_cubes)
+        assert len(min_cubes) == 6
+        empty_regions = aoc_2022.day_18_find_all_empty_regions(10, min_cubes)
+        assert len(empty_regions) == 2
+        assert len(empty_regions[0]) == 1000 - 6 - 1
+        assert empty_regions[1] == {(2, 2, 5)}
+
+    def test_part_two(self):
+        assert aoc_2022.day_18_part_two(self.example_input, 64) == 58
+        p2_solution = aoc_2022.day_18_part_two()
+        lib.verify_solution(p2_solution, part_two=True)
+        assert p2_solution < 2486
+
+
 class TestDay17:
     example_jets = ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>"   # len = 40
 

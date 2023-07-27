@@ -11,6 +11,125 @@ class Puzzle22(Puzzle):
             return input_file.read()
 
 
+def day_18_part_one() -> int:
+    cubes_input = Puzzle22(18).get_text_input()
+    return day_18_total_surface_area(day_18_get_cube_set(cubes_input))
+
+
+def day_18_get_cube_set(raw_cubes: str) -> set:
+    return {tuple(int(d) for d in desc.split(","))
+            for desc in raw_cubes.strip().split("\n")}
+
+
+def day_18_total_surface_area(cubes: {}) -> int:
+    cubes = list(cubes)
+    exposed_faces = 6 * len(cubes)
+    for i, cb in enumerate(cubes):
+        for other in cubes[i + 1:]:
+            if day_18_cubes_are_adjacent(cb, other):
+                exposed_faces -= 2
+    return exposed_faces
+
+
+def day_18_cubes_are_adjacent(cube_1: (int, int, int), cube_2: (int, int, int)) -> bool:
+    touch_score = sum(abs(dim - cube_2[j]) for j, dim in enumerate(cube_1))
+    return touch_score == 1
+
+
+def day_18_part_two(raw_cube_list: str = None, part_1_solution: int = 4340) -> int:
+    if not raw_cube_list:
+        raw_cube_list = Puzzle22(18).get_text_input()
+    all_cubes = day_18_get_cube_set(raw_cube_list)
+    container_side = day_18_calculate_containing_cube_size(all_cubes)
+    all_empty_areas = day_18_find_all_empty_regions(container_side, all_cubes)
+    empty_space_locations = (container_side ** 3) - len(all_cubes)
+    assert sum(len(s) for s in all_empty_areas) == empty_space_locations
+    return day_18_subtract_hidden_surface_area(all_empty_areas, part_1_solution)
+
+
+def day_18_find_all_empty_regions(container_size: int, cubes: set) -> [{}]:
+    all_empty_areas = []
+    for z in range(container_size):
+        for y in range(container_size):
+            for x in range(container_size):
+                point = x, y, z
+                done = False
+                if point not in cubes:
+                    for area in all_empty_areas:
+                        if day_18_is_adjacent_to_space(point, area):
+                            area.add(point)
+                            done = True
+                            break
+                    if not done:
+                        all_empty_areas.append({point})
+        print(f"z={z}")
+        all_empty_areas = day_18_merge_adjoining_spaces(all_empty_areas)
+        if z < 4:
+            print(f"{len(all_empty_areas)} empty areas, "
+                  f"of sizes {', '.join(str(len(a)) for a in all_empty_areas)}")
+            for a in all_empty_areas:
+                print(a)
+    return all_empty_areas
+
+
+def day_18_calculate_containing_cube_size(cubes: set) -> int:
+    field = [max(c[dim] for c in cubes) for dim in range(3)]
+    # print(f"The space is {' x '.join(str(s) for s in field)}")
+    return max(field) + 1
+
+
+def day_18_merge_adjoining_spaces(empty_spaces: [{}]) -> [{}]:
+    total_points = sum(len(sp) for sp in empty_spaces)
+    print(f"Total points before: {total_points}, "
+          f"spaces sizes: {', '.join(str(len(a)) for a in empty_spaces)}")
+    adjacent_pairs = []
+    for i, region in enumerate(empty_spaces):
+        for j, other_area in enumerate(empty_spaces[i + 1:]):
+            for point in region:
+                if day_18_is_adjacent_to_space(point, other_area):
+                    adjacent_pairs.append((i, i + 1 + j))
+                    break
+    print(f"Adjacent pairs by index: {adjacent_pairs}")
+    merge_cascade = sorted(adjacent_pairs, key=lambda pr: (pr[1], pr[0]), reverse=True)
+    print(f"Cascade: {merge_cascade}")
+    kill_list = []
+    for master_index, subset_index in merge_cascade:
+        empty_spaces[master_index].update(empty_spaces[subset_index])
+        kill_list.append(subset_index)
+
+    empty_spaces = [ea for i, ea in enumerate(empty_spaces) if i not in kill_list]
+    print(f"Total points after: {sum(len(a) for a in empty_spaces)}, "
+          f"spaces sizes: {', '.join(str(len(a)) for a in empty_spaces)}")
+    assert sum(len(sp) for sp in empty_spaces) == total_points
+    return empty_spaces
+
+
+def day_18_is_adjacent_to_space(point: tuple, space: {}) -> bool:
+    x, y, z = point
+    adjacent_points = set()
+    for disp in (-1, 1):
+        adjacent_points.add((x + disp, y, z))
+        adjacent_points.add((x, y + disp, z))
+        adjacent_points.add((x, y, z + disp))
+    return any(pt in space for pt in adjacent_points)
+
+
+def day_18_subtract_hidden_surface_area(empty_spaces: [{}],
+                                        total_surface: int = 4340) -> int:
+    surfaces_by_volume = {1: 6, 2: 10}
+    containing_volume = max(len(space) for space in empty_spaces)
+    deductions = 0
+    for sp in empty_spaces:
+        if len(sp) != containing_volume:
+            if len(sp) < 3:
+                deductions += surfaces_by_volume[len(sp)]
+            else:
+                deductions += day_18_total_surface_area(sp)
+    external_surface_area = total_surface - deductions
+    assert external_surface_area < total_surface
+    return external_surface_area
+
+
 day_17_rocks = """####
 
 .#.
