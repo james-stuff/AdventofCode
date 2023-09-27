@@ -1,7 +1,347 @@
+import collections
+
 import aoc_2022
 import library as lib
 import pytest
 import pprint
+
+
+class TestDay19:
+    example_text = """Blueprint 1:
+  Each ore robot costs 4 ore.
+  Each clay robot costs 2 ore.
+  Each obsidian robot costs 3 ore and 14 clay.
+  Each geode robot costs 2 ore and 7 obsidian.
+
+Blueprint 2:
+  Each ore robot costs 2 ore.
+  Each clay robot costs 3 ore.
+  Each obsidian robot costs 3 ore and 8 clay.
+  Each geode robot costs 3 ore and 12 obsidian."""
+
+    def test_load(self):
+        costs = aoc_2022.day_19_read_blueprint(self.example_text[:len(self.example_text) // 2])
+        assert isinstance(costs, dict)
+        assert len(costs) == 4
+        assert costs[aoc_2022.ORE] == {aoc_2022.ORE: 4}
+        assert costs[aoc_2022.OBSIDIAN] == {aoc_2022.ORE: 3, aoc_2022.CLAY: 14}
+        assert all(isinstance(item, dict) for item in costs.values())
+        assert costs == aoc_2022.day_19_costs
+        ore_components = [v[aoc_2022.ORE] for v in costs.values()]
+        print(ore_components)
+        assert all([v[aoc_2022.ORE] <= 4 for v in costs.values()])
+        actual_input = aoc_2022.Puzzle22(19).get_text_input()
+        it = aoc_2022.day_19_blueprint_start_indices(actual_input)
+        assert len(it) == 30
+        for i, blueprint in enumerate(it):
+            end_pos = it[i + 1] if i < len(it) - 1 else blueprint + 500
+            bp_costs = aoc_2022.day_19_read_blueprint(actual_input[blueprint:end_pos])
+            assert isinstance(bp_costs, dict)
+            assert len(bp_costs) == 4
+            assert all(len(v) == 2 for v in [*bp_costs.values()][2:])
+            assert all(isinstance(item, dict) for item in bp_costs.values())
+            assert all([v[aoc_2022.ORE] <= 4 for v in bp_costs.values()])
+
+    def test_data_structures(self):
+        production_path = {0: aoc_2022.ORE, 3: aoc_2022.CLAY,
+                           5: aoc_2022.CLAY, 7: aoc_2022.CLAY,
+                           11: aoc_2022.OBSIDIAN, 12: aoc_2022.CLAY,
+                           15: aoc_2022.OBSIDIAN, 18: aoc_2022.GEODE,
+                           21: aoc_2022.GEODE}
+        assert aoc_2022.day_19_geode_count(production_path) == 9
+
+    def test_recursive_path_finding(self):
+        """doing it by path steps, not over time:"""
+        one_minute_run = aoc_2022.day_19_next_possible_paths({0: 0}, 1)
+        assert one_minute_run == [{0: 0}]
+        # pprint.pprint(one_minute_run)
+        assert aoc_2022.day_19_next_possible_paths({0: 0}, stop_at_minute=2) == [{0: 0, 3: 1}]
+        paths = aoc_2022.day_19_next_possible_paths({0: 0}, stop_at_minute=4)
+        # pprint.pprint(paths)
+        assert len(paths) == 2
+        assert any(5 in p for p in paths)
+        # assert [*filter(lambda p: 5 in p, paths)][0][5] == 0
+        example_path = {0: 0, 3: 1, 5: 1, 7: 1, 11: 2, 12: 1, 15: 2, 18: 3, 21: 3}
+        end_paths = aoc_2022.day_19_next_possible_paths(example_path)
+        assert end_paths[0][23] == 0
+        assert end_paths[1][22] == end_paths[1][23] == 1
+        # assert end_paths[2][22] == 2
+        # pprint.pprint(end_paths)
+        end_at = 16      # 21 minutes -> 614,456 possible paths
+        big_recursion = aoc_2022.day_19_next_possible_paths({0: 0}, end_at)
+        print(f"There are {len(big_recursion)} possible paths after {end_at} minutes")
+        productive_paths = [*filter(lambda d: aoc_2022.GEODE in d.values(), big_recursion)]
+        print(f" . . . of which {len(productive_paths)} produce any open geodes")
+        best_path = max(productive_paths, key=lambda p: aoc_2022.day_19_geode_count(p))
+        print(f"The best path is:")
+        pprint.pprint(best_path)
+        print(f"This produces {aoc_2022.day_19_geode_count(best_path)} open geodes")
+        # assert len(big_recursion) == 1024
+        # pprint.pprint(big_recursion)
+
+    def test_resource_availability(self):
+        def snip_at_minute(in_dict: dict, last_minute: int) -> dict:
+            return {k: v for k, v in in_dict.items() if k <= last_minute}
+
+        example_path = {0: 0, 3: 1, 5: 1, 7: 1, 11: 2, 12: 1, 15: 2, 18: 3, 21: 3}
+        assert aoc_2022.day_19_current_resources(snip_at_minute(example_path, 0), 0) == {0: 0}
+        assert aoc_2022.day_19_current_resources(snip_at_minute(example_path, 2), 2) == {0: 2}
+        assert aoc_2022.day_19_current_resources(snip_at_minute(example_path, 3), 3) == {0: 1, 1: 0}
+        assert aoc_2022.day_19_current_resources(snip_at_minute(example_path, 6), 6) == {0: 2, 1: 4}
+        assert aoc_2022.day_19_current_resources(snip_at_minute(example_path, 24), 24) == \
+               {0: 6, 1: 41, 2: 8, 3: 9}
+
+    def test_purchase_options(self):
+        assert not aoc_2022.day_19_purchasing_options({})
+        assert not aoc_2022.day_19_purchasing_options({aoc_2022.ORE: 1})
+        assert aoc_2022.day_19_purchasing_options({aoc_2022.ORE: 2}) == [aoc_2022.CLAY]
+        assert aoc_2022.day_19_purchasing_options({aoc_2022.ORE: 6,
+                                                   aoc_2022.CLAY: 13}) == [aoc_2022.ORE,
+                                                                           aoc_2022.CLAY]
+        assert aoc_2022.day_19_purchasing_options({aoc_2022.ORE: 8,
+                                                   aoc_2022.CLAY: 16}) == [aoc_2022.ORE,
+                                                                           aoc_2022.CLAY,
+                                                                           aoc_2022.OBSIDIAN]
+        assert aoc_2022.day_19_purchasing_options({aoc_2022.ORE: 100,
+                                                   aoc_2022.CLAY: 100,
+                                                   aoc_2022.OBSIDIAN: 100,
+                                                   aoc_2022.GEODE: 100}) == [aoc_2022.ORE,
+                                                                             aoc_2022.CLAY,
+                                                                             aoc_2022.OBSIDIAN,
+                                                                             aoc_2022.GEODE]
+        assert aoc_2022.day_19_purchasing_options({aoc_2022.ORE: 3,
+                                                   aoc_2022.OBSIDIAN: 19}) == [aoc_2022.CLAY,
+                                                                               aoc_2022.GEODE]
+
+    def test_optimising_in_stages(self):
+        # NOW WORKS FOR BOTH EXAMPLES (but takes over four minutes)
+        first_half, _, second_half = self.example_text.partition("\n\n")
+        expected = {first_half: 9, second_half: 12}
+        example_path = {0: 0, 3: 1, 5: 1, 7: 1, 11: 2, 12: 1, 15: 2, 18: 3, 21: 3}
+        for text, result in expected.items():
+            aoc_2022.day_19_costs = aoc_2022.day_19_read_blueprint(text)
+            staged_paths = aoc_2022.day_19_non_duplicate_paths_in_n_minute_intervals()
+            assert aoc_2022.day_19_evaluate_complete_paths(staged_paths) == result
+            if text is first_half:
+                winning_paths = [*filter(
+                        lambda p: aoc_2022.day_19_geode_count(p) == result,
+                        staged_paths)]
+                for path in winning_paths:
+                    print(path)
+                assert example_path in winning_paths
+                # assert len(winning_paths) == 16
+                # break
+        # assert aoc_2022.time_of_first_instance_of_next_robot(
+        #     [{0: 0}], aoc_2022.OBSIDIAN) == 11
+
+    def test_optimising_by_intervals(self):
+        paths = aoc_2022.day_19_non_duplicate_paths_in_n_minute_intervals()
+        aoc_2022.day_19_evaluate_complete_paths(paths)
+        assert {0: 0, 3: 1, 5: 1, 7: 1, 11: 2, 12: 1, 15: 2, 18: 3, 21: 3} in paths
+
+    def test_score_hash(self):
+        test_path = {0: 0, 3: 1, 5: 1, 7: 1, 11: 2, 12: 1, 15: 2, 18: 3, 21: 3}
+        print(aoc_2022.day_19_current_resources(test_path, 24))
+        assert aoc_2022.day_19_path_score(test_path, 24) == (10 ** 12) +\
+            (4 * 10 ** 15) + \
+            (2 * 10 ** 18) + \
+            (2 * 10 ** 21) +\
+            9008041006
+        assert aoc_2022.day_19_path_score({0: 0, 3: 1}, 4) == 10 ** 15 + 10 ** 12 + 1002
+
+    def test_optimisation_by_working_backwards(self):
+        print("")
+        times = aoc_2022.day_19_calculate_latest_creation_times()
+        assert times[2] == 19
+        assert times[1] == 14
+        first_half, _, second_half = self.example_text.partition("\n\n")
+        expected = {first_half: 9, second_half: 12}
+        for text, result in expected.items():
+            aoc_2022.day_19_costs = aoc_2022.day_19_read_blueprint(text)
+            useful_paths = aoc_2022.day_19_optimisation_with_cutoffs()
+            assert aoc_2022.day_19_evaluate_complete_paths(useful_paths) == result
+            if text is first_half:
+                break
+        # text = aoc_2022.Puzzle22(19).get_text_input()
+        # it = aoc_2022.day_19_blueprint_start_indices(text)
+        # longest_time_to_run = 0
+        for i, blueprint in enumerate(it):
+            print(f"+++ BLUEPRINT {i + 1} +++")
+            end_pos = it[i + 1] if i < len(it) - 1 else blueprint + 500
+            aoc_2022.day_19_costs = aoc_2022.day_19_read_blueprint(text[blueprint:end_pos])
+            aoc_2022.day_19_latest_creation_times = \
+                aoc_2022.day_19_calculate_latest_creation_times()
+            print(f"\t{aoc_2022.day_19_latest_creation_times}")
+            earliest_cut_off_this_time = min(aoc_2022.day_19_latest_creation_times.values())
+            if earliest_cut_off_this_time > longest_time_to_run:
+                longest_time_to_run = earliest_cut_off_this_time
+        assert longest_time_to_run == 16
+
+    def test_p1_debug(self):
+        """run for one blueprint at a time"""
+        run_for_blueprint = 19
+        print("\n", f"BLUEPRINT {run_for_blueprint}:")
+        text = aoc_2022.Puzzle22(19).get_text_input()
+        start, end = 0, 100_000_000
+        # it = aoc_2022.day_19_blueprint_start_indices(text)
+        # start = it[run_for_blueprint - 1]
+        # if run_for_blueprint < 30:
+        #     end = it[run_for_blueprint]
+        text = self.example_text
+        end = self.example_text.index("Blueprint 2:")
+        aoc_2022.day_19_costs = aoc_2022.day_19_read_blueprint(text[start:end])
+        paths_up_to_13 = aoc_2022.day_19_next_possible_paths({0: 0}, 12)
+        assert {0: 0, 3: 1, 5: 1, 7: 1, 11: 2} in paths_up_to_13
+        paths = aoc_2022.day_19_staged_optimisation()
+        result = aoc_2022.day_19_evaluate_complete_paths(paths)
+
+    def test_using_map_of_robot_combos(self):
+        import itertools
+
+        def without_premature_robots(combo: (int,)) -> bool:
+            for index in range(3, 0, -1):
+                if combo[index] > 0:
+                    if any(combo[prev_ind] == 0 for prev_ind in range(index)):
+                        return False
+            return True
+
+        space = [tuple(item for item in c if item > 0)
+                 for c in filter(lambda comb: without_premature_robots(comb),
+                                   itertools.product(range(23), repeat=4))
+                 if sum(c) <= 23 and c[0] > 0]
+        print(f"space has {len(space)} points")
+        # for i, pt in enumerate(space):
+        #     print(pt, end=" " if i % 8 else "\n")
+        # print(f"23 ** 4 is {23 ** 4}")
+        distances = {pt: 24 for pt in space}
+        print(len(distances))
+        # a point is adjacent if any one of its members increases by 1,
+        # or a new member is added with value 1 (up to a limit of 4 values)
+        # its distance from the last-viewed point is the time in minutes
+        # taken to produce the required resources
+        unfiltered_space = {combo: {25: 0} for combo in
+                            filter(lambda c: c[0] > 0, itertools.product(range(23),
+                                                                          repeat=4))}
+        print(f"Size of unfiltered space is {len(unfiltered_space)}")
+
+    def test_dijkstra(self):
+        """Dijkstra method will never work because the edge weight depends
+            on the path already taken (production rates in force)"""
+        assert aoc_2022.day_19_get_neighbours_in_rates_space((1, 0, 0, 0)) == [(2, 0, 0, 0),
+                                                                               (1, 1, 0, 0)]
+        assert aoc_2022.day_19_get_neighbours_in_rates_space((1, 1, 1, 1)) == [(2, 1, 1, 1),
+                                                                               (1, 2, 1, 1),
+                                                                               (1, 1, 2, 1),
+                                                                               (1, 1, 1, 2),
+                                                                               ]
+        first_half, _, second_half = self.example_text.partition("\n\n")
+        expected = {first_half: 9, second_half: 12}
+        for text, result in expected.items():
+            aoc_2022.day_19_costs = aoc_2022.day_19_read_blueprint(text)
+            useful_paths = aoc_2022.day_19_solve_using_dijkstra_method()
+            for p in useful_paths:
+                print(p)
+            assert aoc_2022.day_19_evaluate_complete_paths(useful_paths) == result
+
+    def test_20_sept_brain_fart(self):
+        path = {0: 0}
+        assert aoc_2022.day_19_minutes_required_to_produce(aoc_2022.ORE, path) == 5
+        assert aoc_2022.day_19_minutes_required_to_produce(aoc_2022.CLAY, path) == 3
+        multi_robot_path = {0: 0, 3: 1}
+        assert aoc_2022.day_19_minutes_required_to_produce(
+            aoc_2022.ORE, multi_robot_path) == 4
+        assert aoc_2022.day_19_minutes_required_to_produce(
+            aoc_2022.CLAY, multi_robot_path) == 2
+        assert aoc_2022.day_19_minutes_required_to_produce(
+            aoc_2022.OBSIDIAN, multi_robot_path) == 15
+        args = path, 22
+        paths_using_old_method = aoc_2022.original_day_19_next_possible_paths(*args)
+        aoc_2022.day_19_evaluate_complete_paths(paths_using_old_method)
+        print("\t\tNew method:")
+        using_new_method = aoc_2022.day_19_next_possible_paths(*args)
+        aoc_2022.day_19_evaluate_complete_paths(using_new_method)
+        assert len(paths_using_old_method) == len(using_new_method)
+        # breaks down for complete paths as new method relaxes the 'worthwhile' condition
+
+    def test_parameters_for_part_one(self):
+        origin_path = {0: 0}
+        minutes_to_run_for = 14
+        obsidian_blueprints = 0
+
+        text = aoc_2022.Puzzle22(19).get_text_input()
+        it = aoc_2022.day_19_blueprint_start_indices(text)
+        for i, blueprint in enumerate(it):
+            print(f"+++ BLUEPRINT {i + 1} +++")
+            end_pos = it[i + 1] if i < len(it) - 1 else blueprint + 500
+            aoc_2022.day_19_costs = aoc_2022.day_19_read_blueprint(text[blueprint:end_pos])
+            initial_paths = aoc_2022.day_19_next_possible_paths(origin_path, minutes_to_run_for)
+            print(f"\tProduces {len(initial_paths):>8,} paths initially")#, of which "
+                  # f"{len([p for p in initial_paths if max(p.values()) == aoc_2022.GEODE])}"
+                  # f" have produced a geode robot")
+            potential_scores = collections.defaultdict(int) # {score: no.of paths}
+            # scored_paths = [(max(path.keys()) + aoc_2022.GEODE - max(path.values()), path) for path in initial_paths]
+            scored_paths = [(aoc_2022.day_19_pseudo_score_partial_path(path), path) for path in initial_paths]
+            best_score = min(t[0] for t in scored_paths)
+            paths_to_proceed_with = [fp[1] for fp in filter(lambda sp: sp[0] <= best_score + 1, scored_paths)]
+            final_paths = []
+            for ppw in paths_to_proceed_with:
+                final_paths += aoc_2022.day_19_next_possible_paths(ppw)
+            print(f"\t-> {len(final_paths)} final paths")
+            aoc_2022.day_19_evaluate_complete_paths(final_paths)
+
+            for score, _ in scored_paths:
+                potential_scores[score] += 1
+            print(f"\t{'   '.join([str(k) + ': ' + str(v) for k, v in sorted(potential_scores.items())])}")
+            if i == 27:
+                for ip in initial_paths:
+                    print(ip)
+            assert len(potential_scores) > 0
+            # if any(max(path.values()) == aoc_2022.OBSIDIAN for path in initial_paths):
+            #     obsidian_blueprints += 1
+            #     print(f"\tThis blueprint can produce obsidian already")
+        assert not obsidian_blueprints
+
+    def test_part_one_example(self):
+        ten_minute_paths = aoc_2022.day_19_next_possible_paths({0: 0}, 10)
+        assert {0: 0, 3: 1, 5: 1, 7: 1, 11: 2} in ten_minute_paths
+        assert aoc_2022.day_19_minutes_required_to_produce(aoc_2022.OBSIDIAN,
+                                                           {0: 0, 5: 0, 8: 0, 10: 0, 11: 1, 12: 1, 13: 1, 14: 1, 15: 1}
+                                                           ) == 2
+        # NOW WORKS FOR BOTH EXAMPLES (but takes over four minutes)
+        first_half, _, second_half = self.example_text.partition("\n\n")
+        expected = {first_half: 9, second_half: 12}
+        example_path = {0: 0, 3: 1, 5: 1, 7: 1, 11: 2, 12: 1, 15: 2, 18: 3, 21: 3}
+        for blueprint_text, result in expected.items():
+            aoc_2022.day_19_costs = aoc_2022.day_19_read_blueprint(blueprint_text)
+            # found_paths = aoc_2022.day_19_next_possible_paths({0: 0})
+            found_paths = aoc_2022.day_19_branch_and_bound_best_paths()
+            assert aoc_2022.day_19_evaluate_complete_paths(found_paths) == result
+            if blueprint_text is first_half:
+                winning_paths = [*filter(
+                    lambda p: aoc_2022.day_19_geode_count(p) == result,
+                    found_paths)]
+                for path in winning_paths:
+                    print(path)
+                # assert example_path in winning_paths
+                    # assert len(winning_paths) == 16
+                    # break
+            # assert aoc_2022.time_of_first_instance_of_next_robot(
+            #     [{0: 0}], aoc_2022.OBSIDIAN) == 11
+
+    def test_part_one(self):
+        print("\n")
+        solution = aoc_2022.day_19_part_one()
+        true_geodes_per_blueprint = {1: 3, 2: 0, 3: 0, 4: 2, 5: 9, 6: 2,
+                                     7: 1, 8: 0, 9: 6, 10: 1, 11: 15, 12: 0,
+                                     13: 9, 14: 11, 15: 0, 16: 0, 17: 12,
+                                     18: 0, 19: 0, 20: 3, 21: 3, 22: 1,
+                                     23: 16, 24: 0, 25: 7, 26: 9, 27: 5,
+                                     28: 0, 29: 15, 30: 1}
+        # solution = aoc_2022.day_19_get_total_score(results)
+        lib.verify_solution(solution, 2301)
+        assert solution > 2229  # (an improvement from 2197.  And 2212 . . . )
+        # runs in approx. 02:07
+        # keep an eye on Blueprint 17
 
 
 class TestDay18:
@@ -235,6 +575,7 @@ Valve JJ has flow rate=21; tunnel leads to valve II"""
         big_table = aoc_2022.day_16_build_distances_table(aoc_2022.day_16_load_valve_data(aoc_2022.Puzzle22(16).get_text_input()))
         big_rows = len(big_table)
         print(f"The big table has {big_rows} rows")
+        pprint.pprint(big_table)
         assert big_rows == 16
         assert "AA" in big_table
         # pprint.pprint(big_table)
@@ -254,6 +595,39 @@ Valve JJ has flow rate=21; tunnel leads to valve II"""
               f"{max([aoc_2022.day_16_score_journey(r, eg_valve_data) for r in all_routes])}")
         print(f"That is "
               f"{max(all_routes, key=lambda r: aoc_2022.day_16_score_journey(r, eg_valve_data))}")
+
+    def test_permutation_based_journey_lengths(self, eg_valve_data):
+        aoc_2022.day_16_route_table = aoc_2022.day_16_build_distances_table(eg_valve_data)
+        assert aoc_2022.day_16_journey_time(("AA", "BB")) == 2
+        assert aoc_2022.day_16_journey_time(("AA", "CC")) == 3
+        assert aoc_2022.day_16_journey_time(("BB", "DD", "JJ")) == 7
+
+    def test_using_perms_and_combs(self, eg_valve_data):
+        aoc_2022.day_16_best_journey_using_permutations(#eg_valve_data)
+            aoc_2022.day_16_load_valve_data(aoc_2022.Puzzle22(16).get_text_input()))
+
+    def test_tuple_journey_scoring(self, eg_valve_data):
+        aoc_2022.day_16_route_table = aoc_2022.day_16_build_distances_table(eg_valve_data)
+        assert aoc_2022.day_16_score_tuple_journey((), eg_valve_data) == 0
+        assert aoc_2022.day_16_score_tuple_journey(("AA", "BB", "CC"), eg_valve_data) == 364 + 52
+        assert aoc_2022.day_16_score_tuple_journey(("AA", "DD"), eg_valve_data) == 20 * 28
+        with open("inputs_2022\\day16example_desc.txt", "r") as file:
+            text = file.read()
+        activity_by_minute = text.split("\n\n")
+        moves = ["AA"]
+        moves += [act.split("\n")[2][-3:-1] for act in activity_by_minute
+                  if act.count("\n") == 2
+                  and act[-14:-10] == "open"]
+        journey = tuple(moves)
+        assert aoc_2022.day_16_score_tuple_journey(journey, eg_valve_data) == 1651
+
+    def test_one_step_at_a_time(self, eg_valve_data):
+        aoc_2022.day_16_route_table = aoc_2022.day_16_build_distances_table(eg_valve_data)
+        nr = aoc_2022.day_16_best_journey_by_taking_it_one_step_at_a_time(eg_valve_data)
+        print(nr)
+        assert len(set(nr)) == len(nr)
+        best_route = max(nr, key=lambda r: aoc_2022.day_16_score_tuple_journey(r, eg_valve_data))
+        assert aoc_2022.day_16_score_tuple_journey(best_route, eg_valve_data) == 1651
 
     def test_part_one(self, eg_valve_data):
         aoc_2022.day_16_route_table = aoc_2022.day_16_build_distances_table(eg_valve_data)
@@ -315,12 +689,21 @@ Valve JJ has flow rate=21; tunnel leads to valve II"""
 
     def test_part_two(self, eg_valve_data):
         aoc_2022.day_16_route_table = aoc_2022.day_16_build_distances_table(eg_valve_data)
+        assert aoc_2022.day_16_score_double_headed_tuple_journey(
+            (("AA", "JJ", "BB", "CC", ), ("AA", "DD", "HH", "EE", )), eg_valve_data
+        ) == 1707
         eg_solution = aoc_2022.day_16_by_teaming_up_with_elephant(self.example)
         assert eg_solution == 1707
-        # lib.verify_solution(aoc_2022.day_16_part_two(), part_two=True)
-        # TODO: passes with example, but runs forever with real input
-        #       am I checking too many routes?
+        lib.verify_solution(aoc_2022.day_16_part_two(), part_two=True)
 
+        # TODO: IDEAS
+        #   What to do next?  Give me the best combinations of three(?) steps
+        #           that move things on the most
+        #   Inputs: pool of available points to visit (or robots to build - complicated)
+        #           starting conditions, i.e. production rates
+        #               would anything be gained by representing paths between valves
+        #               in the same way as a production timeline?
+        #   Chain together sets of three steps
 
 
 class TestDay15:

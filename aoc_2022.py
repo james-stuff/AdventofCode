@@ -1,14 +1,404 @@
+import copy
+import itertools
+
 from main import Puzzle
 import library as lib
 from collections import defaultdict
 from itertools import product, cycle
 from copy import deepcopy
+import re
 
 
 class Puzzle22(Puzzle):
     def get_text_input(self) -> str:
         with open(f'inputs_2022\\input{self.day}.txt', 'r') as input_file:
             return input_file.read()
+
+
+ORE, CLAY, OBSIDIAN, GEODE = range(4)
+day_19_costs = {
+    ORE: {ORE: 4},
+    CLAY: {ORE: 2},
+    OBSIDIAN: {ORE: 3, CLAY: 14},
+    GEODE: {ORE: 2, OBSIDIAN: 7},
+}
+day_19_latest_creation_times = {}
+day_19_last_useful_minute = {GEODE: 23, OBSIDIAN: 22, CLAY: 21, ORE: 22}
+
+
+def day_19_part_one(test_input: str = None) -> int:
+    global day_19_costs
+    results = {}
+    text = test_input if test_input else Puzzle22(19).get_text_input()
+    it = day_19_blueprint_start_indices(text)
+    for i, blueprint in enumerate(it):
+        print(f"+++ BLUEPRINT {i + 1} +++")
+        end_pos = it[i + 1] if i < len(it) - 1 else blueprint + 500
+        day_19_costs = day_19_read_blueprint(text[blueprint:end_pos])
+        results[i + 1] = day_19_evaluate_complete_paths(
+            day_19_branch_and_bound_best_paths())
+    print(results)
+    return day_19_get_total_score(results)
+
+
+def day_19_blueprint_start_indices(input_text: str) -> [int]:
+    return [match.start() for match in re.finditer("Blueprint", input_text)]
+
+
+def day_19_read_blueprint(text: str) -> {}:
+    def name_to_constant(name_of_robot: str) -> int:
+        return globals()[name_of_robot.upper()]
+
+    costs = {}
+    outline_of_costs = re.findall(r"Each.*?\.", text)
+    for sentence in outline_of_costs:
+        robot = sentence.split()[1]
+        cost_breakdown = re.findall(r"[0-9]+\s\w+", sentence)
+        costs[name_to_constant(robot)] = {name_to_constant(resource): int(quantity)
+                                          for item in cost_breakdown
+                                          for quantity, _, resource in [item.partition(" ")]}
+    return costs
+
+
+def day_19_calculate_latest_creation_times() -> {}:
+    """Work backwards through the robot list.  The latest time at which
+        an obsidian robot can be created is such that there will be enough
+        obsidian to create a geode robot in minute 23.  This is the lowest number whose
+        triangular number is >= the obsidian cost of the geode robot.
+        Apply similar logic to calculate cut-off points for preceding robots.
+        TODO: What about the ore cost?"""
+    def triangular(n: int) -> int:
+        return sum(range(n + 1))
+
+    latest_time = 23
+    creation_times = {GEODE: latest_time}
+    for robot in range(2, 0, -1):
+        quantity = day_19_costs[robot + 1][robot]
+        latest_time -= min(filter(lambda x: triangular(x) >= quantity, range(quantity)))
+        creation_times[robot] = latest_time
+    return creation_times
+
+
+def day_19_get_neighbours_in_rates_space(point: (int,)) -> [(int,)]:
+    # first_zero = [ti for ti, tv in enumerate(point) if tv == 0][0] if 0 in point else 4
+    results = []
+    for i_change, rate in enumerate(point):
+        results.append(tuple(p + 1 if ind == i_change else p for ind, p in enumerate(point)))
+        if rate == 0:
+            break
+    return results
+
+
+def day_19_solve_using_dijkstra_method() -> [{}]:
+    unvisited = [*filter(lambda c: c[0] > 0 and sum(c) < 22, product(range(23), repeat=4))]
+    best_paths = {combo: {25: 0} for combo in unvisited}
+    best_paths[(1, 0, 0, 0)] = {0: 0}
+    consecutive_unhelpful_points = 0
+    while unvisited:
+        this_point = min(unvisited, key=lambda v: max(best_paths[v].keys()))
+        consecutive_unhelpful_points += 1
+        my_path = best_paths[this_point]
+        for i_change, rate in enumerate(this_point):
+            next_neighbour = tuple(r + 1 if ind == i_change else r
+                                   for ind, r in enumerate(this_point))
+            existing_path = best_paths[next_neighbour]
+            for minute in range(max(my_path.keys()) + 1, 23):
+                if i_change in day_19_purchasing_options(
+                        day_19_current_resources(my_path, minute)):
+                    path_via_me = copy.deepcopy(my_path)
+                    path_via_me[minute + 1] = i_change
+                    if minute + 1 < max(existing_path.keys()):
+                        best_paths[next_neighbour] = path_via_me
+                        if 25 not in existing_path:
+                            print(f"{path_via_me} replaces {existing_path} as best path"
+                                  f" to {next_neighbour}")
+                    consecutive_unhelpful_points = 0
+                    break
+            if rate == 0:
+                break
+        unvisited.remove(this_point)
+        if consecutive_unhelpful_points > 10:
+            break
+    return [*filter(lambda path: GEODE in path.values(), best_paths.values())]
+        # for np in neighbours:
+        #     n_from_start = distances[this_point] + 1
+        #     if n_from_start < distances[np]:
+        #         distances[np] = n_from_start
+        # if this_point == destination:
+        #     break
+
+
+def day_19_optimisation_with_cutoffs() -> [{}]:
+    global day_19_latest_creation_times
+    day_19_latest_creation_times = day_19_calculate_latest_creation_times()
+    productive_paths = [{0: 0}]
+    for robot in (CLAY, OBSIDIAN, GEODE):
+        cut_off_time = day_19_latest_creation_times[robot]
+        next_paths = []
+        for path in productive_paths:
+            next_paths += day_19_next_possible_paths(path, cut_off_time)
+        print(f"After {cut_off_time} mins, {len(next_paths)} -> ", end="")
+        productive_paths = [*filter(lambda p: robot in p.values(), next_paths)]
+        print(len(productive_paths))
+    # print(f"Taking these to the end gives us {len(productive_paths)} paths altogether")
+    # best_path = max(productive_paths, key=lambda p: day_19_geode_count(p)) \
+    #     if productive_paths else {}
+    # print(f"The best path is:")
+    # print(best_path)
+    # print(f"This produces {day_19_geode_count(best_path)} open geodes")
+    # return day_19_geode_count(best_path)
+    return productive_paths
+
+
+def day_19_path_score(path: {}, minute: int) -> int:
+    """score a path based on combination of current resources and production rates"""
+    current_resources = day_19_current_resources(path, minute)
+    resources_score = sum(10 ** (k * 3) * v for k, v in current_resources.items())
+    rates_score = sum(10 ** ((robot + 4) * 3) *
+                      (len([*filter(lambda v: v == robot, path.values())]))
+                      for robot in range(max(path.values()) + 1))
+    return resources_score + rates_score
+
+
+def day_19_non_duplicate_paths_in_n_minute_intervals():
+    """perhaps run for five minutes at a time, then filter down by
+        unique path score
+        Possibly also only taking paths with the top nn% scores"""
+    paths_so_far = [{0: 0}]
+    for mins in range(5, 21, 5):
+        paths_after_interval = []
+        for p in paths_so_far:
+            paths_after_interval += day_19_next_possible_paths(p, stop_at_minute=mins)
+        print(f"After {mins} minutes, {len(paths_after_interval)} paths -> ", end="")
+        paths_so_far = day_19_remove_duplicate_paths(paths_after_interval, mins)
+        print(f"{len(paths_so_far)}")
+    final_paths = []
+    for pp in paths_so_far:
+        final_paths += day_19_next_possible_paths(pp)
+    return final_paths
+
+
+def day_19_remove_duplicate_paths(path_list: [{}], mins: int) -> [{}]:
+    scored_paths = {}
+    for new_path in path_list:
+        score = day_19_path_score(new_path, mins)
+        if score not in scored_paths:
+            scored_paths[score] = new_path
+    top_scores = sorted(scored_paths)[-200:]
+    # print(top_scores)
+    return [v for k, v in scored_paths.items() if k in top_scores]
+
+
+def day_19_staged_optimisation() -> [{}]:
+    def get_name_of(robot: int) -> str:
+        return [*filter(lambda name: eval(name) == robot,
+                        globals().keys())][0].lower()
+
+    paths_so_far = [{0: 0}]
+    elapsed_minutes = 0
+    for next_robot in range(CLAY, GEODE + 1):
+        paths_examined = 0
+        next_paths = []
+        scored_next_paths = {}
+        elapsed_minutes += next_robot_emergence_time(paths_so_far, next_robot) + 2
+        print(f"Elapsed minutes: {elapsed_minutes}")
+        path_no = 0
+        for path in paths_so_far:
+            path_no += 1
+            if path_no % 50 == 0:
+                print(f"Evaluating {path_no}th path")
+            all_next_paths = day_19_next_possible_paths(path, elapsed_minutes)
+            for np in all_next_paths:
+                if next_robot in np.values():
+                    score = day_19_path_score(np, elapsed_minutes)
+                    if score not in scored_next_paths:
+                        scored_next_paths[score] = np
+            paths_examined += len(all_next_paths)
+            useful_paths = [*filter(lambda p: next_robot in p.values(), all_next_paths)]
+            # useful_paths = [*filter(lambda p: next_robot in p.values(),
+            #                         [*scored_next_paths.values()])]
+            next_paths += useful_paths
+        # paths_so_far = next_paths
+        print(f"Line 139.  {len(next_paths)=}; {len(scored_next_paths)=}")
+        # paths_so_far = [*filter(lambda pp: pp in next_paths, scored_next_paths.values())]
+        paths_so_far = [*scored_next_paths.values()]
+        # paths_examined = len(scored_next_paths)
+        print(f"After {elapsed_minutes} minutes, we have {paths_examined} "
+              f"possible new paths, of which {len(next_paths)} have produced a "
+              f"{get_name_of(next_robot)} robot.")
+        print("", f"of which there are "
+                  f"{len(paths_so_far)}"
+                  f" that will be taken to the next level.")
+    final_paths = []
+    for pp in paths_so_far:
+        final_paths += day_19_next_possible_paths(pp)
+    return final_paths
+
+
+def day_19_evaluate_complete_paths(paths: [{}]) -> int:
+    print(f"Taking these to the end gives us {len(paths)} paths altogether")
+    best_path = max(paths, key=lambda p: day_19_geode_count(p)) if paths else {}
+    print(f"The best path is:")
+    print(best_path)
+    open_geodes = day_19_geode_count(best_path)
+    print(f"This produces {open_geodes} open geodes")
+    print(f"There are "
+          f"{len([*filter(lambda p: day_19_geode_count(p) == open_geodes, paths)])}"
+          f" paths that achieve this result")
+    return open_geodes
+
+
+def next_robot_emergence_time(paths: [{}], next_robot: int) -> int:
+    minutes_in = max(max(p.keys() for p in paths))
+    time = 0
+    while True:
+        time += 1
+        if minutes_in + time > 22:
+            return time - 1
+        next_paths = []
+        for path in paths:
+            add_paths = day_19_next_possible_paths(path, minutes_in + time)
+            if any(next_robot in np.values() for np in add_paths):
+                return time + 1
+            next_paths += add_paths
+
+
+def day_19_next_possible_paths(path_so_far: dict, stop_at_minute: int = 22) -> [dict]:
+    possible_new_paths = [path_so_far]
+    most_advanced_robot = max(path_so_far.values())
+    ore_robots_cap = max(day_19_costs[r][ORE] for r in day_19_costs)
+    for robot in range(most_advanced_robot +
+                       (2 if most_advanced_robot < GEODE else 1)):
+        time_needed = day_19_minutes_required_to_produce(robot, path_so_far)
+        if (max(path_so_far.keys()) + time_needed < stop_at_minute + 2) and \
+                (day_19_production_is_worthwhile(robot,
+                                                 max(path_so_far.keys()) + time_needed)):
+            if (robot != ORE) or ([*path_so_far.values()].count(ORE) < ore_robots_cap):
+                new_path = copy.deepcopy(path_so_far)
+                new_path[max(path_so_far.keys()) + time_needed] = robot
+                possible_new_paths += day_19_next_possible_paths(new_path, stop_at_minute)
+                if path_so_far in possible_new_paths:
+                    possible_new_paths.remove(path_so_far)
+    return possible_new_paths
+
+
+def original_day_19_next_possible_paths(path_so_far: dict, stop_at_minute: int = 22) -> [dict]:
+    possible_new_paths = [path_so_far]
+    # scored_new_paths = {day_19_path_score(path_so_far, stop_at_minute): path_so_far}
+    most_advanced_robot = max(path_so_far.values())
+    for robot in range(most_advanced_robot +
+                       (2 if most_advanced_robot < GEODE else 1)):
+        for m in range(max(path_so_far.keys()), stop_at_minute + 1):
+            available_resources = day_19_current_resources(path_so_far, m)
+            if robot in day_19_purchasing_options(available_resources):
+                if day_19_production_is_worthwhile(robot, m, available_resources, path_so_far):
+                # if m < 22 or robot == GEODE:    # no point building anything other than a geode robot in the last minute
+                    new_path = copy.deepcopy(path_so_far)
+                    new_path[m + 1] = robot
+                    possible_new_paths += original_day_19_next_possible_paths(new_path, stop_at_minute)
+                    # for pth in day_19_next_possible_paths(new_path, stop_at_minute):
+                    #     scored_new_paths[day_19_path_score(pth, stop_at_minute)] = pth
+                break
+    return possible_new_paths
+    # return [*scored_new_paths.values()]
+
+
+def day_19_branch_and_bound_best_paths() -> [dict]:
+    initial_paths = day_19_next_possible_paths({0: 0}, 14)
+    day_19_evaluate_complete_paths(initial_paths)
+    scored_paths = [(day_19_pseudo_score_partial_path(path), path)
+                    for path in initial_paths]
+    best_score = min(t[0] for t in scored_paths)
+    paths_to_proceed_with = [fp[1] for fp in filter(
+        lambda sp: sp[0] <= best_score + 2, scored_paths)]
+    final_paths = []
+    for ppw in paths_to_proceed_with:
+        final_paths += day_19_next_possible_paths(ppw)
+    return final_paths
+
+
+def day_19_pseudo_score_partial_path(pp: dict) -> int:
+    """upper bound assumption: produce the next robot up asap.
+        then assume each more advance robot will be created
+        on a minute-by-minute basis, with geode robots all the way to the end.
+        Result is the minute at which geode robot production would start"""
+    start_minute = max(pp.keys())
+    next_robot = max(pp.values()) + 1
+    return start_minute + GEODE - next_robot
+    # return start_minute + \
+    #        day_19_minutes_required_to_produce(next_robot, pp) + \
+    #        GEODE - next_robot
+
+
+def day_19_production_is_worthwhile(robot: int, minute: int) -> bool:
+    """could producing such a robot actually lead to increased geode production?"""
+    if minute > 21:
+        if minute == 23 and robot == GEODE:
+            return True
+        if minute == 22 and (robot != CLAY):
+            return True
+        return False
+    return True
+
+    # OLD VERSION FOLLOWS:
+    if minute < day_19_last_useful_minute[robot]:
+        if robot == GEODE:
+            return True
+        if (robot == OBSIDIAN) and (resources[ORE] +
+                                    sum(23 - k for k, v in
+                                        path.items() if v == ORE) >=
+                                    day_19_costs[GEODE][ORE]): #and (
+            # resources[OBSIDIAN] + sum(23 - k for k, v in path.items()
+            #                           if v == OBSIDIAN) >=
+            # day_19_costs[GEODE][OBSIDIAN]
+        # ):
+            return True
+        return robot in (ORE, CLAY)
+    return False
+
+
+def day_19_minutes_required_to_produce(robot: int, path: {}) -> int:
+    current_resources = day_19_current_resources(path, max(path.keys()))
+    time_costs_by_resource = []
+    for commodity, cost in day_19_costs[robot].items():
+        amount_needed = cost - current_resources[commodity]
+        production_rate = len([*filter(lambda rbt: rbt == commodity, path.values())])
+        time_costs_by_resource.append(
+            (amount_needed // production_rate) +
+            (1 if (amount_needed % production_rate > 0) else 0)
+        )
+    return max(*time_costs_by_resource, 0) + 1  # +1 is the minute taken to build robot
+
+
+def day_19_current_resources(path: dict, minute: int) -> dict:
+    current_resources = defaultdict(int)
+    for m, robot in path.items():
+        current_resources[robot] += minute - m
+        if m > 0:
+            for cost_item, amount in day_19_costs[robot].items():
+                current_resources[cost_item] -= amount
+    return current_resources
+
+
+def day_19_purchasing_options(resources_available: dict) -> [int]:
+    options = []
+    for robot in day_19_costs:
+        if all(
+                (resource in resources_available) and
+                (resources_available[resource] >= required_quantity)
+                for resource, required_quantity in day_19_costs[robot].items()
+        ):
+            options.append(robot)
+    return options
+
+
+def day_19_geode_count(path: {}) -> int:
+    return sum(24 - minute for minute, robot in path.items()
+               if robot == GEODE)
+
+
+def day_19_get_total_score(quality_ratings: {}) -> int:
+    return sum(id_no * max_geodes for id_no, max_geodes in quality_ratings.items())
 
 
 def day_18_part_one() -> int:
@@ -301,8 +691,12 @@ day_16_route_table = {}
 def day_16_part_one() -> int:
     global day_16_route_table
     text = Puzzle22(16).get_text_input()
-    day_16_route_table = day_16_build_distances_table(day_16_load_valve_data(text))
-    return day_16_by_traversal_of_all_routes_between_worthwhile_points(text)
+    valve_data = day_16_load_valve_data(text)
+    day_16_route_table = day_16_build_distances_table(valve_data)
+    # return day_16_by_traversal_of_all_routes_between_worthwhile_points(text)
+    tuple_routes = day_16_best_journey_by_taking_it_one_step_at_a_time(valve_data)
+    print(f"{len(tuple_routes):,} routes found")
+    return max([day_16_score_tuple_journey(r, valve_data) for r in tuple_routes])
 
 
 def day_16_part_two() -> int:
@@ -321,6 +715,44 @@ def day_16_by_traversal_of_all_routes_between_worthwhile_points(input_text: str)
 
 def day_16_by_teaming_up_with_elephant(input_text: str) -> int:
     valves = day_16_load_valve_data(input_text)
+    best_routes = {"no route": 0}
+    useful_valves = [*filter(lambda vd: valves[vd][0] > 0, valves)]
+    routes = [(("AA",), ("AA",))]
+    completed_routes = []
+    # TODO: could there be duplication of effort?  I.e. two pairs of routes
+    #   that are the inverse of each other?
+    #       Also times where the human finishes early but the elephant keeps going?
+    for step in range(len(useful_valves)):
+        print(f"{step=:>2}, have to look at {len(routes):>8} routes")
+        next_routes = []
+        for route in routes:
+            my_route, elephant_route = route
+            unvisited_valves = set(useful_valves) - set(my_route) - set(elephant_route)
+            if len(unvisited_valves) == 1:
+                uv = [*unvisited_valves][0]
+                new_route = tuple([*my_route] + [uv]), tuple([*elephant_route] + [uv])
+                completed_routes.append(new_route)
+            else:
+                uv_pairs = [*itertools.permutations(unvisited_valves, 2)]
+                for v1, v2 in uv_pairs:
+                    new_route = tuple([*my_route] + [v1]), tuple([*elephant_route] + [v2])
+                    new_rm, new_re = new_route
+                    # There are some scenarios where someone finishes first
+                    if day_16_journey_time(new_rm) > 25:
+                        new_route = my_route, new_re
+                    if day_16_journey_time(new_re) > 25:
+                        new_route = new_rm, elephant_route
+                    if len(unvisited_valves) == 2:
+                        completed_routes.append(new_route)
+                    elif day_16_score_double_headed_tuple_journey(new_route, valves) > \
+                            max(best_routes.values()) + 30:
+                        next_routes.append(new_route)
+        # if step % 2 == 0:
+        for r in routes:
+            best_routes[r] = day_16_score_double_headed_tuple_journey(r, valves)
+        routes = next_routes
+    return max(day_16_score_double_headed_tuple_journey(j, valves) for j in completed_routes)
+    return 0    # old code follows:
     routes = day_16_get_all_valid_team_routes([[], []])
     print(f"{len(routes):,} routes found")
     return max([day_16_score_double_headed_journey(r, valves) for r in routes])
@@ -442,8 +874,74 @@ def day_16_get_shortest_distance_between(origin: str, destination: str,
     return distances[destination]
 
 
+def day_16_best_journey_using_permutations(valves: dict) -> int:
+    global day_16_route_table
+    day_16_route_table = day_16_build_distances_table(valves)
+    useful_valves = [valve for valve, v_data in valves.items() if v_data[0] > 0]
+    journeys = ["".join(p) for p in filter(lambda perm:
+                                           day_16_journey_time(perm) + len(perm) < 30,
+                                           itertools.permutations(useful_valves, 6))]
+    print(f"There are {len(journeys)=}")
+    # print(journeys)
+    print(day_16_journey_time(journeys[1]))
+
+
+def day_16_best_journey_by_taking_it_one_step_at_a_time(valves: dict):
+    best_routes = {"no route": 0}
+    useful_valves = [*filter(lambda vd: valves[vd][0] > 0, valves)]
+    routes = [("AA",)]
+    completed_routes = []
+    for step in range(len(useful_valves)):
+        # print(f"{step=:>2}, have to look at {len(routes):>8} routes")
+        next_routes = []
+        for route in routes:
+            unvisited_valves = set(useful_valves) - set(route)
+            for uv in unvisited_valves:
+                new_route = tuple([*route] + [uv])
+                if len(unvisited_valves) == 1 or min(day_16_route_table[uv][vv]
+                                                     for vv in unvisited_valves
+                                                     if vv != uv) + \
+                        1 + day_16_journey_time(new_route) >= 30:
+                    # if there are not other unvisited valves that
+                    #    can be reached and opened in time
+                    completed_routes.append(new_route)
+                elif step % 2 or \
+                        day_16_score_tuple_journey(new_route, valves) > max(best_routes.values()):
+                    # only move forward with journeys that improve on the best
+                    # we had two turns ago
+                    next_routes.append(new_route)
+        if step % 2 == 0:
+            for r in routes:
+                best_routes[r] = day_16_score_tuple_journey(r, valves)
+        routes = next_routes
+    return completed_routes
+
+
+def day_16_score_tuple_journey(journey: (str,), valve_data: dict,
+                               time_available: int = 30) -> int:
+    total_flow, flow_start_time = 0, 0
+    for i, location in enumerate(journey[1:]):
+        flow_start_time += day_16_route_table[journey[i]][location] + 1
+        flow_duration_minutes = time_available - flow_start_time
+        flow_rate, _ = valve_data[location]
+        total_flow += flow_rate * flow_duration_minutes
+    return total_flow
+
+
+def day_16_journey_time(journey: (str,)) -> int:
+    """Time taken to make all steps of the journey FROM 'AA', including
+        the time taken to turn each valve on"""
+    if isinstance(journey, tuple):
+        return sum(day_16_route_table[j][journey[i + 1]]
+                   for i, j in enumerate(journey[:-1])) + len(journey) - 1
+
+
 def day_16_score_double_headed_journey(journey: [[str]], valve_data: {}) -> int:
     return sum(day_16_score_journey(j, valve_data, time_available=26) for j in journey)
+
+
+def day_16_score_double_headed_tuple_journey(journey: ((str,),), valve_data: {}) -> int:
+    return sum(day_16_score_tuple_journey(j, valve_data, time_available=26) for j in journey)
 
 
 def day_16_score_journey(journey: [str], valve_data: {},
