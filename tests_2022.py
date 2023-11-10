@@ -120,9 +120,15 @@ Blueprint 2:
         args = path, 22
         # paths_using_old_method = aoc_2022.original_day_19_next_possible_paths(*args)
         # aoc_2022.day_19_evaluate_complete_paths(paths_using_old_method)
+        """already have enough resources"""
+        enough_ore_for_clay = {0: 0, 5: 0}
+        assert aoc_2022.day_19_minutes_required_to_produce(aoc_2022.CLAY, enough_ore_for_clay) == 2
+        enough_for_immediate_clay = {0: 0, 5: 0, 7: 0, 8: 0, 11: 1}
+        assert aoc_2022.day_19_minutes_required_to_produce(aoc_2022.CLAY,
+                                                           enough_for_immediate_clay) == 1
         print("\t\tNew method:")
-        using_new_method = aoc_2022.day_19_next_possible_paths(*args)
-        aoc_2022.day_19_evaluate_complete_paths(using_new_method)
+        # using_new_method = aoc_2022.day_19_next_possible_paths(*args)
+        # aoc_2022.day_19_evaluate_complete_paths(using_new_method)
         # assert len(paths_using_old_method) == len(using_new_method)
         # breaks down for complete paths as new method relaxes the 'worthwhile' condition
 
@@ -264,12 +270,13 @@ Blueprint 2:
         assert aoc_2022.day_19_breadth_first_search() == 56
         bp_2_text = self.example_text[self.example_text.index("Blueprint 2"):]
         aoc_2022.day_19_costs = aoc_2022.day_19_read_blueprint(bp_2_text)
-        # assert aoc_2022.day_19_method_for_part_two() == 62
-        # currently fails on next line but only takes 04:33
+        aoc_2022.day_19_set_robot_caps()
+        # # assert aoc_2022.day_19_method_for_part_two() == 62
+        # # currently fails on next line but only takes 04:33
         assert aoc_2022.day_19_breadth_first_search() == 62
         proposed = aoc_2022.day_19_part_two()
         lib.verify_solution(proposed, part_two=True)
-        assert proposed > 9728
+        assert proposed > 10064 # better answer 09/11/2023, takes 38.5sec
         ## 'best' results so far:
         #   {1: 38, 2: 16, 3: 16} in 55sec
         #       (after visiting 950,951 vertices in Blueprint 3)
