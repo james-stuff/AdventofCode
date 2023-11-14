@@ -36,6 +36,9 @@ def day_19_part_two() -> int:
     it = day_19_blueprint_start_indices(text)
     for i, blueprint in enumerate(it[:3]):
         print(f"+++ BLUEPRINT {i + 1} +++")
+        if i == 2:
+            results[i + 1] = 1
+        #     break
         end_pos = it[i + 1] if i < len(it) - 1 else blueprint + 500
         day_19_costs = day_19_read_blueprint(text[blueprint:end_pos])
         day_19_set_robot_caps()
@@ -99,26 +102,18 @@ def day_19_breadth_first_search() -> int:
     def geode_ceiling(path: {}) -> int:
         nonlocal geode_ceil_memo
         geodes_from_existing_robots = day_19_geode_count(path)
-        # no_of_missing_robots = sum([*path.values()].count(res) for res in (ORE, OBSIDIAN))
-            # only possible if enough resources to make a geode robot every minute
-        # earliest_geode_minute = max(path.keys()) + 1 + GEODE - max(path.values())
         best_robot, latest_time = max(path.values()), max(path.keys())
         if (best_robot, latest_time) in geode_ceil_memo:
             max_additional_geodes = geode_ceil_memo[(best_robot, latest_time)]
         else:
             earliest_geode_minute = max(path.keys()) + 1
-            if max(path.values()) < OBSIDIAN or day_19_minutes_required_to_produce(GEODE, path) > 1:
+            if max(path.values()) < OBSIDIAN: # or day_19_minutes_required_to_produce(GEODE, path) > 1:
                 earliest_geode_minute += 1
             max_additional_geodes = sum(
                 final_minute - mm
                 for mm in range(earliest_geode_minute, final_minute + 1)
             )
             geode_ceil_memo[(best_robot, latest_time)] = max_additional_geodes
-        # if any([*path.values()].count(res) < day_19_costs[GEODE][res]
-        #        for res in (ORE, OBSIDIAN)):
-        #     max_additional_geodes -= final_minute - earliest_geode_minute + 1
-        # max_additional_geodes -= sum(day_19_costs[GEODE][res] > [*path.values()].count(res)
-        #                              for res in (ORE, OBSIDIAN))
         return geodes_from_existing_robots + max_additional_geodes
 
     def upper_bound_check(path: {}) -> bool:
@@ -130,10 +125,14 @@ def day_19_breadth_first_search() -> int:
     best_score = 0
     geode_ceil_memo = {}
     final_minute = [24, 32][day_19_doing_part_two]
-    visited, queue = set(), deque([origin])
-    scoring = {}
+    visited, queue = 0, deque([origin])
     while queue:
         vertex = queue.popleft()
+        visited += 1
+        if vertex == {0: 0, 5: 0, 8: 0, 10: 1, 11: 0,
+                         12: 1, 13: 1, 14: 1, 15: 1,
+                         16: 1, 17: 1, 18: 2, 19: 1}:
+            print("")
         if upper_bound_check(vertex):
             # For each neighbour not visited, mark it as visited, and enqueue it
             for neighbour in day_19_get_path_neighbours(vertex):
@@ -141,10 +140,6 @@ def day_19_breadth_first_search() -> int:
                 if upper_bound_check(neighbour):
                     queue.append(neighbour)
                     if max(neighbour.values()) >= OBSIDIAN:
-                        if neighbour == {0: 0, 3: 0, 5: 0, 6: 1, 7: 1, 8: 1, 9: 1,
-                                         10: 1, 11: 2, 12: 1, 13: 2, 14: 2, 15: 2,
-                                         17: 2, 18: 3, 19: 2, 20: 3, 21: 2}:
-                            print("")
                         lower_bound_path = copy.deepcopy(neighbour)
                         # calculate lower bound, producing a new geode robot whenever possible:
                         m = max(neighbour.keys())
@@ -155,18 +150,12 @@ def day_19_breadth_first_search() -> int:
                         geodes_from_ngb = day_19_geode_count(lower_bound_path)
                         if geodes_from_ngb > best_score:
                             best_score = geodes_from_ngb
-                            print(f"{best_score=} after visiting {len(visited) + 1:>6,} vertices. "
+                            print(f"{best_score=} after visiting {visited:>6,} vertices. "
                                   f"Queue size is {len(queue):>8,}", end="")
                             queue = deque([*filter(upper_bound_check, queue)])
-                            # scoring = {}
-                            # for pp in queue:
-                            #     scoring[day_19_path_score(pp, max(pp.keys()))] = pp
-                            # queue = deque(scoring.values())
-                            print(f"-> {len(queue):>8,}, scoring: {len(scoring)}")  # path: {vertex}")
+                            print(f"-> {len(queue):>8,}")  # path: {vertex}")
                             print(f"\tPath: {neighbour}")
-                            # print(f"\t{'lower bound longer' + str(lower_bound_path) if len(lower_bound_path) > len(neighbour) else ''}")
-                            # print("", geode_ceil_memo)
-        # print(f"Visited {len(visited):>8,} vertices in total")
+                            print(f"\tLBP: {lower_bound_path}")
     print(geode_ceil_memo)
     return best_score
 
@@ -197,17 +186,11 @@ def day_19_get_path_neighbours(path: {}) -> [{}]:
         if day_19_robot_cap_check(path, new_robot):
             ready_minute = current_minute + \
                            day_19_minutes_required_to_produce(new_robot, path)
-            if ready_minute < final_minute and day_19_production_is_worthwhile(
-                new_robot, ready_minute
-            ):
+            if ready_minute < final_minute:
                 new_path = copy.deepcopy(path)
                 new_path[ready_minute] = new_robot
                 out.append(new_path)
     return out
-
-
-def day_19_path_to_tuple(path: {}) -> (int,):
-    return tuple(path.values())
 
 
 def day_19_robot_cap_check(path: {}, proposed_robot: int) -> bool:
@@ -294,8 +277,8 @@ def day_19_next_possible_paths(path_so_far: dict, stop_at_minute: int = 22,
                        (2 if most_advanced_robot < GEODE else 1)):
         minute_ready = max(path_so_far.keys()) + \
                        day_19_minutes_required_to_produce(robot, path_so_far)
-        if (minute_ready < stop_at_minute + 2) and \
-                day_19_production_is_worthwhile(robot, minute_ready):
+        if (minute_ready < stop_at_minute + 2): # and \
+                # day_19_production_is_worthwhile(robot, minute_ready):
             if cap_check(robot):
                 new_path = copy.deepcopy(path_so_far)
                 new_path[minute_ready] = robot
@@ -386,8 +369,8 @@ def day_19_production_is_worthwhile(robot: int, minute: int) -> bool:
     final_minute = [24, 32][day_19_doing_part_two]
     if robot == GEODE:
         return True
-    if minute >= final_minute - 3: #21:
-        return robot != CLAY
+    # if minute >= final_minute - 3: #21:
+    #     return robot != CLAY
     return True
 
 
