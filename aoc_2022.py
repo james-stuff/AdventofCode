@@ -15,6 +15,84 @@ class Puzzle22(Puzzle):
             return input_file.read()
 
 
+def day_20_part_one():
+    encrypted_list = Puzzle22(20).input_as_list(int)
+    return day_20_extract_solution(day_20_mix(encrypted_list))
+
+
+def day_20_part_two():
+    encryption_key = 811589153
+    encrypted_list = [v * encryption_key for v in Puzzle22(20).input_as_list(int)]
+    mixed_list = day_20_mix(encrypted_list, mixing_steps=10)
+    return day_20_extract_solution(mixed_list)
+
+
+def day_20_mix(initial: [int], steps: int = 0, mixing_steps: int = 1) -> [int]:
+    """keys and values in linked list are indices of the original list"""
+    sequence_length = len(initial)
+    if not steps:
+        steps = sequence_length
+    linked_list = {n: n + 1 for n in range(sequence_length)}
+    linked_list[sequence_length - 1] = 0
+    rev_ll = {v: k for k, v in linked_list.items()}
+    for mix in range(mixing_steps):
+        print(f"Mix step: {mix + 1}")
+        for original_index in range(sequence_length)[:steps]:
+            # if not original_index % 5:
+            #     print(original_index)
+            current_before = rev_ll[original_index]
+            jumps = initial[original_index] % (sequence_length - 1)
+            if jumps == 0:
+                continue
+            if jumps < 0:
+                new_before = current_before
+                for _ in range(-jumps):
+                    new_before = rev_ll[new_before]
+                new_after = linked_list[new_before]
+            else:
+                new_after = linked_list[original_index]
+                for _ in range(jumps):
+                    new_after = linked_list[new_after]
+                new_before = rev_ll[new_after]
+            linked_list[current_before] = linked_list[original_index]
+            linked_list[original_index] = new_after
+            linked_list[new_before] = original_index
+            rev_ll[linked_list[current_before]] = current_before
+            rev_ll[original_index] = new_before
+            rev_ll[new_after] = original_index
+            # print(original_index, initial[original_index])
+            assert len(linked_list) == len(initial)
+    out = []
+    nn = 0
+    for _ in range(sequence_length):
+        out.append(initial[nn])
+        nn = linked_list[nn]
+    assert nn == 0
+    return out
+
+
+def day_20_extract_solution(mixed_values: [int]) -> int:
+    zero_position = mixed_values.index(0)
+    answer = 0
+    cycled = cycle(mixed_values)
+    for n in range(zero_position + 3001):
+        val = next(cycled)
+        if n > zero_position and n % 1000 == zero_position % 1000:
+            answer += val
+            print(f"Found: {val}", end="\t")
+    return answer
+
+
+def day_20_properties_tests(initial: [int], final: [int]) -> bool:
+    # assert len(set(initial)) == len(initial)  -> there are duplicates in real thing
+    assert len(final) == len(initial)
+    print(f"initial: {len(set(initial))} -> final: {len(set(final))}")
+    assert len(set(final)) == len(set(initial))
+    assert set(final).issubset(set(initial))
+    assert set(final) == set(initial)
+    return True
+
+
 ORE, CLAY, OBSIDIAN, GEODE = range(4)
 day_19_costs = {
     ORE: {ORE: 4},

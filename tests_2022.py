@@ -5,6 +5,51 @@ import pytest
 import pprint
 
 
+class TestDay20:
+    example = [1, 2, -3, 3, -2, 0, 4]
+
+    def test_mixing(self):
+        first_mixed = aoc_2022.day_20_mix(self.example)
+        assert aoc_2022.day_20_properties_tests(self.example, first_mixed)
+        assert first_mixed == [1, 2, -3, 4, 0, 3, -2]
+        print(f"{first_mixed=}")
+        assert aoc_2022.day_20_extract_solution(first_mixed) == 3
+        simple_with_duplicates = [2, 0, 2]
+        mixed_swd = aoc_2022.day_20_mix(simple_with_duplicates)
+        assert mixed_swd == simple_with_duplicates
+        minus_seq_len = [1, 1, 0, -4]
+        mixed_minus = aoc_2022.day_20_mix(minus_seq_len)
+        # assert mixed_minus == minus_seq_len
+        assert aoc_2022.day_20_properties_tests(minus_seq_len, mixed_minus)
+        real_thing = aoc_2022.Puzzle22(20).input_as_list(int)
+        # assert aoc_2022.day_20_properties_tests(real_thing, real_thing)
+        # rt_numbers = set(rt % 5000 for rt in real_thing)
+        # frequency = {rr: real_thing.count(rr) for rr in rt_numbers}
+        # for num, freq in sorted(frequency.items(), key=lambda i: i[1]):
+        #     print(f"{num:>5} appears {freq:>3} times")
+        # print(f"set length is {len(rt_numbers)}")
+        real_mixed = aoc_2022.day_20_mix(real_thing)
+        assert real_mixed.count(0) == 1
+        assert aoc_2022.day_20_properties_tests(real_thing, real_mixed)
+
+    def test_edge_cases(self):
+        simplest = [1, 2, 0]
+        assert aoc_2022.day_20_mix(simplest, 1) == [1, 0, 2]
+        negative = [1, -2, 0]
+        assert aoc_2022.day_20_mix(negative) == [1, 0, -2]
+        same_as_length = [1, 3, 0]
+        """not even sure what some of the correct answers are here"""
+        # assert aoc_2022.day_20_mix(same_as_length) == [1, 0, 3]
+        # bigger_than_length = [1, 5, 0]
+        # print(aoc_2022.day_20_mix(bigger_than_length))
+
+    def test_part_one(self):
+        lib.verify_solution(aoc_2022.day_20_part_one(), 7584)
+
+    def test_part_two(self):
+        lib.verify_solution(aoc_2022.day_20_part_two(), 4907679608191, part_two=True)
+
+
 class TestDay19:
     example_text = """Blueprint 1:
   Each ore robot costs 4 ore.
