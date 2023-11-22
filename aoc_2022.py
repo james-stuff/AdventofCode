@@ -18,10 +18,41 @@ class Puzzle22(Puzzle):
 day_21_monkeys = {}
 
 
+def day_21_part_two() -> int:
+    """Realised in exploratory testing that there is a simple linear
+        relationship between the 'humn' value and eventual output.
+        Output is only an int every 5th value, starting at 3, and decreases
+        by 51 for every five increments of the input"""
+    side, target = day_21_setup_for_part_two()
+    day_21_monkeys["humn"] = 3
+    starting_point = day_21_evaluate_recursively(side)
+    return int((starting_point - target) * 5 // 51) + 3
+
+
+def day_21_setup_for_part_two(text: str = "") -> (str, int):
+    global day_21_monkeys
+    if not text:
+        text = Puzzle22(21).get_text_input()
+    day_21_monkeys = day_21_load_monkeys(text)
+    p1_root_operator = day_21_monkeys["root"][5]
+    day_21_monkeys["root"] = day_21_monkeys["root"].replace(p1_root_operator, "==")
+    day_21_monkeys["humn"] = "NaN"
+    root_lhs, root_rhs = day_21_monkeys["root"][:4], day_21_monkeys["root"][8:]
+    required_value, human_side = 0, ""
+    for side in (root_lhs, root_rhs):
+        print(f"{side=}")
+        try:
+            required_value = day_21_evaluate_recursively(side)
+        except KeyError:
+            human_side = side
+    print(f"Human contributes to monkey {human_side}, which must return {required_value}")
+    return human_side, required_value
+
+
 def day_21_part_one() -> int:
     global day_21_monkeys
     day_21_monkeys = day_21_load_monkeys(Puzzle22(21).get_text_input())
-    return day_21_evaluate_recursively("root")
+    return int(day_21_evaluate_recursively("root"))
 
 
 def day_21_load_monkeys(text: str) -> {}:

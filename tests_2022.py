@@ -48,6 +48,35 @@ hmdt: 32"""
     def test_part_one(self):
         lib.verify_solution(aoc_2022.day_21_part_one(), 82225382988628)
 
+    def test_part_two_setup(self):
+        for text in ("", self.example_text):
+            side, value = aoc_2022.day_21_setup_for_part_two(text)
+            assert "==" in aoc_2022.day_21_monkeys["root"]
+            assert aoc_2022.day_21_monkeys["humn"] == "NaN"
+        solution = 0
+        for n_candidate in range(1, 1000000):
+            aoc_2022.day_21_monkeys["humn"] = n_candidate
+            if aoc_2022.day_21_evaluate_recursively(side) == value:
+                solution = n_candidate
+                break
+        assert solution == 301
+        assert aoc_2022.day_21_evaluate_recursively("root")
+
+    def test_p2_guessing(self):
+        side, target = aoc_2022.day_21_setup_for_part_two()
+        previous = 0
+        for n in range(2_003, 2_103, 5):
+            aoc_2022.day_21_monkeys["humn"] = n
+            result = aoc_2022.day_21_evaluate_recursively(side)
+            print(f"{n} -> {result}\t{result - previous}")
+            previous = result
+        aoc_2022.day_21_monkeys["humn"] = 3
+        starting_point = aoc_2022.day_21_evaluate_recursively(side)
+        result = (starting_point - target) * 5 // 51
+
+    def test_part_two(self):
+        lib.verify_solution(aoc_2022.day_21_part_two(), correct=3429411069028, part_two=True)
+
 
 class TestDay20:
     example = [1, 2, -3, 3, -2, 0, 4]
