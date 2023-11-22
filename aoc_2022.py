@@ -15,6 +15,36 @@ class Puzzle22(Puzzle):
             return input_file.read()
 
 
+day_21_monkeys = {}
+
+
+def day_21_part_one() -> int:
+    global day_21_monkeys
+    day_21_monkeys = day_21_load_monkeys(Puzzle22(21).get_text_input())
+    return day_21_evaluate_recursively("root")
+
+
+def day_21_load_monkeys(text: str) -> {}:
+    def parse_instruction(instr: str):
+        if instr.isnumeric():
+            return int(instr)
+        return instr
+
+    return {line[:4]: parse_instruction(line[6:])
+            for line in text.split("\n") if line.strip()}
+
+
+def day_21_evaluate_recursively(monkey: str) -> int | str:
+    op_or_value = day_21_monkeys[monkey]
+    if isinstance(op_or_value, int):
+        return op_or_value
+    first_id, _, remainder = op_or_value.partition(" ")
+    operation, _, second_id = remainder.partition(" ")
+    first_input, second_input = (day_21_evaluate_recursively(name)
+                                 for name in (first_id, second_id))
+    return eval(f"{first_input} {operation} {second_input}")
+
+
 def day_20_part_one():
     encrypted_list = Puzzle22(20).input_as_list(int)
     return day_20_extract_solution(day_20_mix(encrypted_list))
@@ -803,7 +833,7 @@ def day_16_part_two() -> int:
     global day_16_route_table
     text = Puzzle22(16).get_text_input()
     day_16_route_table = day_16_build_distances_table(day_16_load_valve_data(text))
-    return day_16_by_teaming_up_with_elephant(text)
+    return day_16_breadth_first_search(text)
 
 
 def day_16_by_traversal_of_all_routes_between_worthwhile_points(input_text: str) -> int:
@@ -811,6 +841,114 @@ def day_16_by_traversal_of_all_routes_between_worthwhile_points(input_text: str)
     routes = day_16_get_all_valid_routes([])
     print(f"{len(routes):,} routes found")
     return max([day_16_score_journey(r, valve_data) for r in routes])
+
+
+def day_16_breadth_first_search(text: str) -> int:
+    def upper_bound_check(path: ((str,),)) -> bool:
+        """assume each remaining valve, in descending order of flow rate,
+         can be reached in one step"""
+        ub_score = day_16_score_double_headed_tuple_journey(path, valve_data)
+        me, elephant = path
+        route_times = {ident: day_16_journey_time(pp)
+                       for ident, pp in zip(("Me", "Elephant"), path)}
+        remaining_valves = sorted([v[0] for k, v in valve_data.items()
+                                   if v[0] > 0 and k not in [*me] + [*elephant]])
+        while remaining_valves and ub_score < best and \
+                any(rt < 24 for rt in route_times.values()):
+            next_best_valve = remaining_valves.pop()
+            most_effective_player = min(route_times.keys(), key=lambda k: route_times[k])
+            route_times[most_effective_player] += 2
+            ub_score += next_best_valve * (26 - route_times[most_effective_player])
+        return ub_score >= best
+
+    def lower_bound_score(path: ((str,),)) -> int:
+        """Each player goes to optimal next valve at the time, until the end"""
+        lb_score = day_16_score_double_headed_tuple_journey(path, valve_data)
+        itineraries = {ind: (day_16_journey_time(path[ind]), path[ind][-1])
+                       for ind in range(2)}
+        available = [k for k, v in valve_data.items()
+                     if v[0] > 0 and k not in [*path[0]] + [*path[1]]]
+        while available and any(t[0] < 24 for t in itineraries.values()):
+            for pi in itineraries:
+                t_player, last_visited = itineraries[pi]
+                if t_player > 23:
+                    continue
+                reachable_valves = [*filter(lambda item: (item[0] in available) and
+                                                         (item[1] + 1 + t_player < 26),
+                                            day_16_route_table[last_visited].items())]
+                if reachable_valves:
+                    def achievable_flow(valve_id: str, dist: int) -> int:
+                        elapsed_time = t_player + dist + 1
+                        if elapsed_time > 25:
+                            return 0
+                        return valve_data[valve_id][0] * (26 - elapsed_time)
+                    best_valve, distance = max(reachable_valves,
+                                               key=lambda i: achievable_flow(*i))
+                    lb_score += achievable_flow(best_valve, distance)
+                    t_player += distance + 1
+                    itineraries[pi] = t_player, best_valve
+                    available.remove(best_valve)
+                else:
+                    itineraries[pi] = 26, ""
+            # if max(v[0] for v in itineraries.values()) < 21:
+            #     break
+        return lb_score
+
+    def remove_duplicates(queue: deque) -> deque:
+        if not queue:
+            return queue
+        new_list = []
+        while queue:
+            vertex = queue.popleft()
+            if vertex not in new_list:
+                reverse_vertex = vertex[1], vertex[0]
+                if reverse_vertex not in new_list:
+                    new_list.append(vertex)
+        return deque(new_list)
+
+    global day_16_route_table
+    best = 0
+    valve_data = day_16_load_valve_data(text)
+    day_16_route_table = day_16_build_distances_table(valve_data)
+    vertices = deque([tuple(("AA",) for _ in range(2))])
+    while vertices:
+        route = vertices.popleft()
+        neighbours = [*filter(upper_bound_check, day_16_get_route_neighbours(route))]
+        for ngb in neighbours:
+            lwr_bnd_score = lower_bound_score(ngb)
+            if lwr_bnd_score > best:
+                if lwr_bnd_score > 2495:
+                    print("debug")
+                print(f"Best score is now {lwr_bnd_score}.  Deque size: {len(vertices)} -> ", end="")
+                best = lwr_bnd_score
+                vertices = deque([*filter(upper_bound_check, vertices)])
+                vertices = remove_duplicates(vertices)
+                vertices.append(ngb)
+                vertices = deque(sorted(vertices, key=lower_bound_score, reverse=True))
+                print(len(vertices))
+            vertices.append(ngb)
+        if len(vertices) > 10000:
+            print(f"Vertices {len(vertices)} -> ", end="")
+            vertices = remove_duplicates(vertices)
+            vertices = deque(sorted(vertices, key=lower_bound_score, reverse=True)[:5])
+            print(len(vertices))
+    return best
+
+
+def day_16_get_route_neighbours(route: ((str,),)) -> [((str,),)]:
+    neighbours = []
+    me, elephant = route
+    for p_id, player in enumerate(route):
+        time_used = day_16_journey_time(player)
+        distances = day_16_route_table[player[-1]]
+        for point in distances:
+            if time_used + distances[point] < 25 and (point not in [*me] + [*elephant]):
+                if p_id == 0:
+                    # if len(player) <= len(elephant) + 1:
+                    neighbours.append(((*player, point), elephant))
+                else: #if len(player) <= len(me) + 1:   # do something here to stop duplication?
+                    neighbours.append((me, (*player, point)))
+    return neighbours
 
 
 def day_16_by_teaming_up_with_elephant(input_text: str) -> int:
@@ -914,31 +1052,6 @@ def day_16_get_all_valid_routes(route_so_far: [str]) -> [[str]]:
                                                            [""] * distance + [o] * 2)
         return possible_routes
     return [route_so_far]
-
-
-def day_16_by_finding_best_valve_at_the_time(input_text: str) -> int:
-    """didn't work, unsurprisingly (although answer was of the right kind of magnitude)"""
-    valves = day_16_load_valve_data(input_text)
-    distances = day_16_build_distances_table(valves)
-    minutes_elapsed = 0
-    route = []
-    location = "AA"
-
-    def score_next_move(dest: str) -> int:
-        potential_flow_mins = 30 - minutes_elapsed - 1 - distances[location][dest]
-        return valves[dest][0] * potential_flow_mins
-
-    print(f"\nI'm starting at {location}")
-    while minutes_elapsed < 30:
-        best_valve = max(distances[location].keys(), key=lambda loc: score_next_move(loc))
-        distance_to_move = distances[location][best_valve]
-        if valves[best_valve][0] > 0:
-            route += [""] * (distance_to_move - 1) + [best_valve] * 2
-            minutes_elapsed += 1
-        minutes_elapsed += distance_to_move
-        location = best_valve
-        valves[location] = (0, valves[location][1])
-    return day_16_score_journey(route, day_16_load_valve_data(input_text))
 
 
 def day_16_build_distances_table(valve_data: dict) -> dict:

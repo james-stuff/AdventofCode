@@ -5,6 +5,50 @@ import pytest
 import pprint
 
 
+class TestDay21:
+    example_text = """root: pppw + sjmn
+dbpl: 5
+cczh: sllz + lgvd
+zczc: 2
+ptdq: humn - dvpt
+dvpt: 3
+lfqf: 4
+humn: 5
+ljgn: 2
+sjmn: drzm * dbpl
+sllz: 4
+pppw: cczh / lfqf
+lgvd: ljgn * ptdq
+drzm: hmdt - zczc
+hmdt: 32"""
+
+    def data_exploration(self, text: str):
+        print(f"There are {text.count(':')} monkeys")
+        monkeys = aoc_2022.day_21_load_monkeys(text)
+        assert len(monkeys) == text.count(':')
+        numeric_monkeys = [v for v in monkeys.values() if isinstance(v, int)]
+        print(f"Range of number monkeys: {tuple(ff(numeric_monkeys) for ff in (min, max))}")
+        operative_monkeys = [s for s in monkeys.values() if isinstance(s, str)]
+        assert all(len(om) == 11 for om in operative_monkeys)
+        assert all(om[5] in "+-*/" for om in operative_monkeys)
+        assert len(numeric_monkeys) + len(operative_monkeys) == len(monkeys)
+
+    def test_data_exploration(self):
+        self.data_exploration(aoc_2022.Puzzle22(21).get_text_input())
+
+    def test_p1_example(self):
+        monkeys = aoc_2022.day_21_load_monkeys(self.example_text)
+        self.data_exploration(self.example_text)
+        aoc_2022.day_21_monkeys = monkeys
+        assert aoc_2022.day_21_evaluate_recursively("dbpl") == 5
+        assert aoc_2022.day_21_evaluate_recursively("hmdt") == 32
+        assert aoc_2022.day_21_evaluate_recursively("drzm") == 30
+        assert aoc_2022.day_21_evaluate_recursively("root") == 152
+
+    def test_part_one(self):
+        lib.verify_solution(aoc_2022.day_21_part_one(), 82225382988628)
+
+
 class TestDay20:
     example = [1, 2, -3, 3, -2, 0, 4]
 
@@ -697,22 +741,13 @@ Valve JJ has flow rate=21; tunnel leads to valve II"""
         assert no_options == [[["CC", "DD", "EE"], ["BB", "HH", "JJ"]]]
 
     def test_part_two(self, eg_valve_data):
-        aoc_2022.day_16_route_table = aoc_2022.day_16_build_distances_table(eg_valve_data)
-        assert aoc_2022.day_16_score_double_headed_tuple_journey(
-            (("AA", "JJ", "BB", "CC", ), ("AA", "DD", "HH", "EE", )), eg_valve_data
-        ) == 1707
-        eg_solution = aoc_2022.day_16_by_teaming_up_with_elephant(self.example)
-        assert eg_solution == 1707
-        lib.verify_solution(aoc_2022.day_16_part_two(), part_two=True)
+        solution = aoc_2022.day_16_part_two()
+        assert 2340 < solution < 3060
+        lib.verify_solution(solution, correct=2496, part_two=True)
 
-        # TODO: IDEAS
-        #   What to do next?  Give me the best combinations of three(?) steps
-        #           that move things on the most
-        #   Inputs: pool of available points to visit (or robots to build - complicated)
-        #           starting conditions, i.e. production rates
-        #               would anything be gained by representing paths between valves
-        #               in the same way as a production timeline?
-        #   Chain together sets of three steps
+    def test_bfs(self):
+        print(" ")
+        assert aoc_2022.day_16_breadth_first_search(self.example) == 1707
 
 
 class TestDay15:
