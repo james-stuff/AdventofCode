@@ -1,0 +1,904 @@
+import itertools
+import library as lib
+from main import Puzzle
+import re
+import math
+from itertools import cycle
+from functools import reduce
+from copy import deepcopy
+
+
+class Puzzle23(Puzzle):
+    def get_text_input(self) -> str:
+        with open(f'inputs\\2023\\input{self.day}.txt', 'r') as input_file:
+            return input_file.read()
+
+
+def day_14_part_two(text: str = "") -> int:
+    board = day_14_load_board(text)
+    load_history = {}
+    repeat_period = 0
+    for spin in range(1, 201):
+        for rotation in "NWSE":
+            board = day_14_tilt_board(board, rotation)
+        load_history[spin] = day_14_north_support_beams_loading(board)
+    def next_seven_values(nn: int): return [load_history[nn + k] for k in range(7)]
+    for test_iteration in range(50, 151):
+        nsv = next_seven_values(test_iteration)
+        for forward_steps in range(1, 100):
+            if next_seven_values(test_iteration + forward_steps) == nsv:
+                repeat_period = forward_steps
+                if next_seven_values(test_iteration + (2 * forward_steps)) == nsv:
+                    break
+    print(f"{repeat_period=}")
+    long_interval = 1000000000
+    periods_in_long_interval = long_interval // repeat_period
+    periods_in_150 = 150 // repeat_period
+    matching_key = long_interval - \
+                   ((periods_in_long_interval - periods_in_150) * repeat_period)
+    return load_history[matching_key]
+
+
+def day_14_part_one(text: str = "") -> int:
+    return day_14_load_after_tilt_board_north(day_14_load_board(text))
+
+
+def day_14_north_support_beams_loading(board: {}) -> int:
+    return sum(loc[0] for loc, rock in board.items() if rock == "O")
+
+
+def day_14_tilt_board(board: dict, direction: str) -> dict:
+    tilted = {loc: stop for loc, stop in board.items() if stop == "#"}
+    vertical = direction in "NS"
+    increasing = direction in "NE"
+    scan, roll = (1, 0) if vertical else (0, 1)
+    # print(f"{direction=}")
+    for line in range(max(k[scan] for k in board.keys()) + 1):
+        stoppers = [0] + \
+                   [kk[roll] for kk, v in board.items()
+                    if kk[scan] == line and v == "#"] + \
+                   [max(point[roll] for point in board.keys()) + 1]
+        stoppers = stoppers[::1 if increasing else -1]
+        # print(f"{line=}, {stoppers=}")
+        for i, next_stopper in enumerate(stoppers[1:]):
+            previous_stopper = stoppers[i]
+            rock_filter = {
+                True: lambda point:
+                previous_stopper < point[roll] < next_stopper,
+                False: lambda point:
+                previous_stopper > point[roll] > next_stopper,
+            }[increasing]
+            rolling_rocks = len([pt for pt, ch in board.items()
+                                 if pt[vertical] == line
+                                 and rock_filter(pt)
+                                 and ch == "O"])
+            for rr in range(rolling_rocks):
+                fixed, variable = line, next_stopper + \
+                                  ((-1 if increasing else 1) * (rr + 1))
+                ordered = (variable, fixed) if vertical else (fixed, variable)
+                tilted[ordered] = "O"
+            # print(f"\t{next_stopper=}, {rolling_rocks=}")
+    return tilted
+
+
+def day_14_load_after_tilt_board_north(board: dict) -> int:
+    northern_boundary = max(point[0] for point in board.keys()) + 1
+    aggregate_load = 0
+    for column in range(max(k[1] for k in board.keys()) + 1):
+        stoppers = [kk[0] for kk, v in board.items()
+                    if kk[1] == column and v == "#"]
+        print(f"{column=}, {stoppers=}")
+        for i, stopper_row_id in enumerate(stoppers + [northern_boundary]):
+            previous_stopper = 0 if i == 0 else stoppers[i - 1]
+            rolling_rocks = len([pt for pt, ch in board.items()
+                                 if pt[1] == column
+                                 and previous_stopper < pt[0] < stopper_row_id
+                                 and ch == "O"])
+            print(f"\t{stopper_row_id=}, {rolling_rocks=}")
+            aggregate_load += day_14_rock_load(rolling_rocks, stopper_row_id)
+    return aggregate_load
+
+
+def day_14_rock_load(n_rocks: int, stopper_row: int) -> int:
+    southern_rock = stopper_row - n_rocks
+    return day_14_triangular(n_rocks) + (n_rocks * (southern_rock - 1))
+
+
+def day_14_triangular(n: int) -> int:
+    if n < 2:
+        return n
+    return n + day_14_triangular(n - 1)
+
+
+def day_14_load_board(text: str = "") -> dict:
+    """resultant space has rows starting at 1 and increasing in a northerly direction"""
+    if not text:
+        text = Puzzle23(14).get_text_input().strip("\n")
+    return {
+        (r + 1, c + 1): char
+        for r, row in enumerate(text.split("\n")[::-1])
+        for c, char in enumerate(row)
+        if char in "O#"
+    }
+
+
+def day_13_part_two(text: str = "") -> int:
+    grids = day_13_load_grids(text)
+    return sum(day_13_mirror_score_for_part_two(g) for g in grids)
+
+
+def day_13_mirror_score_for_part_two(grid: [str]) -> int:
+    old_v, old_h = day_13_find_vertical_mirror(grid), day_13_find_horizontal_mirror(grid)
+    for i in range(len(grid)):
+        for j in range(len(grid[0])):
+            test_grid = deepcopy(grid)
+            test_grid[i] = test_grid[i][:j] +\
+                           {".": "#", "#": "."}[test_grid[i][j]] + \
+                           test_grid[i][j + 1:]
+            new_vertical = day_13_find_vertical_mirror(test_grid, old_v)
+            if new_vertical and new_vertical != old_v:
+                return new_vertical
+            new_horizontal = day_13_find_horizontal_mirror(test_grid, old_h)
+            if new_horizontal and new_horizontal != old_h:
+                return 100 * new_horizontal
+
+
+def day_13_part_one(text: str = "") -> int:
+    grids = day_13_load_grids(text)
+    return sum(
+        day_13_find_vertical_mirror(grid) + (100 * day_13_find_horizontal_mirror(grid))
+        for grid in grids
+    )
+
+
+def day_13_find_horizontal_mirror(grid: [str], old_value: int = -1) -> int:
+    return day_13_find_mirror(grid, len(grid), old_value)
+
+
+def day_13_find_vertical_mirror(grid: [str], old_value: int = -1) -> int:
+    grid = [[row[c] for _, row in enumerate(grid)]
+            for c in range(len(grid[0]))]
+    return day_13_find_mirror(grid, len(grid), old_value)
+
+
+def day_13_find_mirror(grid: [str], perpendicular_axis_length: int,
+                       old_value: int = -1) -> int:
+    for test_line in range(1, perpendicular_axis_length):
+        sides = grid[:test_line][::-1], grid[test_line:]
+        if all(sides) and all(s1 == s2 for s1, s2 in zip(*sides)) and test_line != old_value:
+            return test_line
+    return 0
+
+
+def day_13_load_grids(text: str = "") -> [str]:
+    if not text:
+        text = Puzzle23(13).get_text_input().strip("\n")
+    return [sub_grid.split("\n") for sub_grid in text.split("\n\n")]
+
+
+def day_12_count_possible_arrangements(damaged_record: str) -> int:
+    if " " not in damaged_record:
+        return 0
+    sequence, _, groups_data = damaged_record.partition(" ")
+    group_lengths = [int(gl) for gl in groups_data.split(",")]
+    min_sequence_length = sum(group_lengths) + len(group_lengths) - 1
+    if len(sequence) < min_sequence_length:
+        return 0
+    elif len(sequence) == min_sequence_length:
+        return 1
+    """could recursively call on smaller sub-sequences"""
+    for hashes, length in zip(re.finditer(r"#+", damaged_record), group_lengths):
+        if len(hashes.group()) == length:
+            print(f"{damaged_record=} has a fixed #-group of {length=}")
+            # won't work because some #-groups can be hidden
+    return 0
+
+
+def day_11_part_two(text: str = "", expansion_factor: int = 1_000_000) -> int:
+    observed_universe = day_11_find_galaxies(text)
+    expanded = day_11_expand(observed_universe, factor=expansion_factor - 1)
+    return sum(lib.manhattan_distance(p1, p2)
+               for p1, p2 in day_11_all_galaxy_pairs(expanded))
+
+
+def day_11_part_one(text: str = "") -> int:
+    observed_universe = day_11_find_galaxies(text)
+    expanded = day_11_expand(observed_universe)
+    return sum(lib.manhattan_distance(p1, p2)
+               for p1, p2 in day_11_all_galaxy_pairs(expanded))
+
+
+def day_11_expand(universe: set, factor: int = 1) -> set:
+    row_max, col_max = (max(u[i] for u in universe) + 1 for i in range(2))
+    blank_rows = [r for r in range(row_max) if not any(p[0] == r for p in universe)]
+    blank_cols = [c for c in range(col_max) if not any(p[1] == c for p in universe)]
+    # print(f"{blank_rows=}, {blank_cols=}")
+    return {(
+        r + (len([br for br in blank_rows if br < r] * factor)),
+        c + (len([bc for bc in blank_cols if bc < c] * factor))
+    )
+            for r, c in universe}
+
+
+def day_11_all_galaxy_pairs(galaxies: set) -> itertools.combinations:
+    return itertools.combinations(galaxies, 2)
+
+
+def day_11_find_galaxies(text: str = "") -> set:
+    if not text:
+        text = Puzzle23(11).get_text_input()
+    return {(r, c)
+            for r, row in enumerate(text.split("\n"))
+            for c, char in enumerate(row)
+            if char == "#"}
+
+
+point_moves_2023 = {
+    "R": lambda p: lib.Point(p.x, p.y + 1),
+    "L": lambda p: lib.Point(p.x, p.y - 1),
+    "U": lambda p: lib.Point(p.x - 1, p.y),
+    "D": lambda p: lib.Point(p.x + 1, p.y),
+}
+
+
+day_10_map = {}
+
+
+def day_10_part_one(text: str = "") -> int:
+    day_10_load_map(text)
+    found_loops, found_incomplete_pipes = [], []
+    s_point = [pt for pt, symbol in day_10_map.items() if symbol == "S"][0]
+    point = lib.Point(*s_point)
+    if point in day_10_map and all(point not in s for s in
+                                   (found_loops, found_incomplete_pipes)):
+        pipe, is_loop = day_10_trace_pipe_from(point)
+        print(f"Returned pipe: {pipe}")
+        if is_loop:
+            found_loops.append(pipe)
+        elif len(pipe) > 1:
+            found_incomplete_pipes.append(pipe)
+    print(f"Longest loop has {max(len(loop) for loop in found_loops)} sections")
+    return max(len(loop) for loop in found_loops) // 2
+
+
+def day_10_trace_pipe_from(starting_location: (int,)) -> ([], bool):
+    complete_loop = False
+    visited = []
+    valid_neighbours = [day_10_get_next_location_round(
+        starting_location, point_moves_2023[dirn](starting_location))
+        for dirn in "ULDR"]
+    if len(valid_neighbours) > 1:
+        print(f"{starting_location} is possibly in a loop")
+        visited.append(starting_location)
+        location = starting_location
+        previous_location = valid_neighbours[0]
+        next_location = None
+        while True:
+            next_location = day_10_get_next_location_round(location, previous_location)
+            if day_10_is_connectable(location, next_location):
+                if next_location in visited:
+                    complete_loop = True
+                    break
+                visited.append(next_location)
+            else:
+                break
+            previous_location, location = location, next_location
+    return visited, complete_loop
+
+
+def day_10_get_next_location_round(location: (int,), previous: (int,)) -> (int,):
+    """find the next valid location to move to, based on where you are and what shape
+        pipe section you're in"""
+    current_section = day_10_map[location]
+    moves = {"F": "DR", "-": "LR", "7": "DL",
+             "|": "DU", "J": "UL", "L": "UR",
+             "S": "URDL"}
+    valid_neighbours = [point_moves_2023[drn](lib.Point(*location))
+                        for drn in moves[current_section]]
+    return [*filter(lambda vn: vn != lib.Point(*previous) and vn in day_10_map,
+                    valid_neighbours)][0]
+
+
+def day_10_is_connectable(loc_1: (int,), loc_2: (int,)) -> bool:
+    """NB. does not check for adjacency in loop"""
+    invalid_moves = {pipe: pipe for pipe in "F7JL"}     # right-angle pipes cannot connect to other instance of themselves
+    invalid_moves["|"] = "-"    # vertical cannot connect to horizontal and vice-versa
+    invalid_moves["-"] = "|"
+    if loc_1 in day_10_map:
+        first_pipe = day_10_map[loc_1]
+        if first_pipe == "S":
+            return True
+        if loc_2 in day_10_map:
+            return day_10_map[loc_2] not in invalid_moves[first_pipe]
+        return False
+    print(f"Starting location {loc_1} isn't even in the map")
+    return False
+
+
+def day_10_load_map(text: str = ""):
+    global day_10_map
+    if not text:
+        text = Puzzle23(10).get_text_input().strip("\n")
+    day_10_map = {(r, c): symbol
+                  for r, row in enumerate(text.split("\n"))
+                  for c, symbol in enumerate(row)
+                  if symbol != "."}
+
+
+def day_9_part_one(text: str = "") -> int:
+    return sum(day_9_predict_next_number(day_9_fully_decompose(seq))
+               for seq in day_9_load_sequences(text))
+
+
+def day_9_part_two(text: str = "") -> int:
+    return sum(day_9_extrapolate_backwards(day_9_fully_decompose(seq))
+               for seq in day_9_load_sequences(text))
+
+
+def day_9_extrapolate_backwards(pyramid: [int]) -> int:
+    return reduce(lambda x, y: y - x, [p[0] for p in pyramid[::-1]])
+
+
+def day_9_predict_next_number(pyramid: [int]) -> int:
+    return reduce(lambda x, y: x + y, [p[-1] for p in pyramid[::-1]])
+
+
+def day_9_fully_decompose(sequence: [int]) -> [[int]]:
+    next_seq = sequence
+    diff_steps = [sequence]
+    while any(n != 0 for n in next_seq):
+        next_seq = day_9_diff_sequence(next_seq)
+        diff_steps.append(next_seq)
+    return diff_steps
+
+
+def day_9_diff_sequence(sequence: [int]) -> [int]:
+    return [sequence[i + 1] - n for i, n in enumerate(sequence[:-1])]
+
+
+def day_9_load_sequences(text: str = "") -> [[int]]:
+    if not text:
+        text = Puzzle23(9).get_text_input().strip("\n")
+    return [[int(n) for n in line.split(" ")] for line in text.split("\n")]
+
+
+def day_8_part_two(text: str = "") -> int:
+    # if text:
+    #     return day_8_part_two_traverse(*day_8_load_instructions(text))  # naive method for examples
+    turns, route_map = day_8_load_instructions(text)
+
+    def get_repeat_period(location: str) -> int:
+        looping_directions = cycle(turns)
+        visited_zs = set()
+        last_good, repeat = 0, 0
+        print(location, end="->")
+        for step in range(1, 50_000):
+            location = route_map[location][{"L": 0, "R": 1}[next(looping_directions)]]
+            if location[-1] == "Z":
+                print(location, end="->")
+                print("\n", step)
+                return step
+                if location in visited_zs:
+                    repeat = step - last_good   # this was no good if only two steps in 50,000
+                    last_good = step
+                visited_zs.add(location)
+        return repeat
+
+    periods = [get_repeat_period(loc) for loc in
+               [*filter(lambda point: point[-1] == "A", route_map.keys())]]
+    print(periods)
+    return math.lcm(*periods)
+
+
+def day_8_part_two_traverse(directions: str, node_map: {}) -> int:
+    directions = cycle(directions)
+    locations, steps = [*filter(lambda point: point[-1] == "A", node_map.keys())], 0
+    while not all(loc[-1] == "Z" for loc in locations):
+        next_turn = next(directions)
+        locations = [node_map[pt][{"L": 0, "R": 1}[next_turn]] for pt in locations]
+        steps += 1
+    return steps
+
+
+def day_8_part_one() -> int:
+    return day_8_traverse(*day_8_load_instructions())
+
+
+def day_8_traverse(directions: str, node_map: {}) -> int:
+    directions = cycle(directions)
+    location, steps = "AAA", 0
+    while location != "ZZZ":
+        location = node_map[location][{"L": 0, "R": 1}[next(directions)]]
+        steps += 1
+    return steps
+
+
+def day_8_load_instructions(text: str = "") -> (str, {}):
+    if not text:
+        text = Puzzle23(8).get_text_input().strip("\n")
+    directions, _, forks = text.partition("\n\n")
+    node_map = {}
+    for line in forks.split("\n"):
+        point, _, options = line.partition(" = ")
+        node_map[point] = tuple(m.group() for m in re.finditer(r"(\w){3}", options))
+    return directions, node_map
+
+
+day_7_card_values = "".join(f'{i}' for i in range(2, 10)) + "TJQKA"
+
+
+def day_7_part_two(text: str = "") -> int:
+    return day_7_core_method(day_7_score_hand_with_jokers, text)
+
+
+def day_7_part_one(text: str = "") -> int:
+    return day_7_core_method(day_7_score_hand, text)
+
+
+def day_7_core_method(scoring_function: callable, text: str = "") -> int:
+    if not text:
+        text = Puzzle23(7).get_text_input()
+    ranked_hands = sorted([line for line in text.split("\n") if line],
+                          key=lambda data: scoring_function(data[:5]))
+    return sum(int(row[6:]) * (rank + 1) for rank, row in enumerate(ranked_hands))
+
+
+def day_7_score_hand_with_jokers(hand: str) -> int:
+    joker_positions = [i for i, cd in enumerate(hand[::-1]) if cd == "J"]
+    best_card = ""
+    if hand == "JJJJJ":
+        best_card = "A"
+    else:
+        best_card = max(set(hh for hh in hand if hh != "J"), key=lambda card: hand.count(card))
+    hand = hand.replace("J", best_card)
+    jokered_score = day_7_score_hand(hand)
+    js_text = "".join("0" if j // 2 in joker_positions else dd
+                      for j, dd in enumerate(str(jokered_score)[::-1]))[::-1]
+    joker_penalty = sum(10 ** ((2 * jp) + 1) for jp in joker_positions)
+    return int(js_text) - joker_penalty
+
+
+def day_7_score_hand(hand: str) -> int:
+    """-> 11-digit number: 1st = hand-type score (0-6),
+        each remaining pair is value of individual card"""
+    type_score, score = 0, 0
+    match len(set(hand)):
+        case 1:         # all match
+            type_score = 6
+        case 2:
+            type_score = 5 if max(hand.count(cd) for cd in set(hand)) == 4 else 4
+            # four of a kind or full house
+        case 3:
+            type_score = 3 if max(hand.count(cd) for cd in set(hand)) == 3 else 2
+            # three of a kind or two pair
+        case 4:
+            type_score = 1
+    score = (type_score * 10 ** 10) + \
+            sum(day_7_card_values.index(card) * 10 ** (2 * i)
+                for i, card in enumerate(hand[::-1]))
+    return score
+
+
+def day_6_part_two(text: str = "") -> int:
+    raw_times, raw_distances = day_6_load_race_data(text)
+    time, distance_to_beat = (int("".join(str(nn) for nn in group))
+                              for group in (raw_times, raw_distances))
+    roots = tuple(int(r) for r in day_6_solve_quadratic(-1, time, -distance_to_beat))
+    return roots[1] - roots[0]
+
+
+def day_6_solve_quadratic(a: int, b: int, c: int):
+    # (based on ChatGPT)
+    discriminant = math.sqrt(b ** 2 - 4 * a * c)
+    return ((-b + (sign_factor * discriminant)) / (2 * a)
+            for sign_factor in (1, -1))
+
+
+def day_6_part_one(text: str = "") -> int:
+    times, distances = day_6_load_race_data(text)
+    ways_to_win_per_race = []
+    for time, distance_to_beat in zip(times, distances):
+        ways_to_win_per_race.append(
+            len([*filter(
+                lambda hold_time: hold_time * (time - hold_time) > distance_to_beat,
+                range(1, time + 1))])
+        )
+    return math.prod(ways_to_win_per_race)
+
+
+def day_6_load_race_data(text: str = ""):
+    if not text:
+        text = Puzzle23(6).get_text_input()
+    detail_rows = text.split("\n")
+    return tuple(
+        tuple(int(nn.group()) for nn in re.finditer(r"\d+", detail_rows[r]))
+        for r in range(2)
+    )
+
+
+def day_5_part_two(text: str = "") -> int:
+    # range_details, mappings = day_5_load_data(text)
+    # seed_ranges = [(r, range_details[(i * 2) + 1])
+    #                for i, r in enumerate(range_details[::2])]
+    # for location in range(2_000_000_000):
+    #     test_value = location
+    #     for step in [*mappings.keys()][1:][::-1]:
+    #         test_value = day_5_reverse_convert(mappings[step], test_value)
+    #     if day_5_is_seed(test_value, seed_ranges):
+    #         return location
+    # return 0
+    range_details, mappings = day_5_load_data(text)
+    seed_ranges = [(r, range_details[(i * 2) + 1])
+                   for i, r in enumerate(range_details[::2])]
+    total_movements = {sr: 0 for sr in seed_ranges}
+    for step_key in mappings:
+        total_movements = day_5_cumulative_offsets_next_step(
+            total_movements, mappings[step_key])
+    return min(k[0] + v for k, v in total_movements.items())
+
+
+def day_5_cumulative_offsets_next_step(offsets: {}, step_mappings: [(int,)]) -> {}:
+    new_co = {}
+    for seed_range, offset in offsets.items():
+        first_original_seed, range_length = seed_range
+        last_original_seed = first_original_seed + range_length - 1
+        unused_ranges = [(first_original_seed, last_original_seed)]
+        for mapping in step_mappings:
+            kill_list, add_list = [], []
+            sm_dest, sm_start, sm_len = mapping
+            for first_seed, last_seed in unused_ranges:
+                if sm_start <= first_seed + offset and \
+                        sm_start + sm_len - 1 >= last_seed + offset:
+                    """Wholly within mapping range"""
+                    kill_list.append((first_seed, last_seed))
+                    new_co[(first_seed, last_seed - first_seed + 1)] = \
+                        offset + sm_dest - sm_start
+                else:
+                    if first_seed == 79 and sm_start == 77:
+                        print("dbg")
+                    overlap_starts_in_ur = \
+                        first_seed + offset < sm_start <= last_seed + offset
+                    overlap_ends_in_ur = \
+                        first_seed + offset < sm_start + sm_len - 1 < last_seed + offset
+                    if overlap_starts_in_ur and overlap_ends_in_ur:
+                        kill_list.append((first_seed, last_seed))
+                        new_co[(sm_start - offset, sm_len)] = \
+                            offset + sm_dest - sm_start
+                        add_list.append((first_seed, sm_start - offset - 1))
+                        add_list.append((sm_start + sm_len - offset, last_seed))
+                    elif overlap_ends_in_ur:
+                        kill_list.append((first_seed, last_seed))
+                        new_co[(first_seed,
+                                sm_start + sm_len - first_seed - offset)] = \
+                            offset + sm_dest - sm_start
+                        add_list.append((sm_start + sm_len - offset, last_seed))
+                    elif overlap_starts_in_ur:
+                        kill_list.append((first_seed, last_seed))
+                        new_co[(sm_start - offset,
+                                last_seed + offset + 1 - sm_start)] = \
+                            offset + sm_dest - sm_start
+                        add_list.append((first_seed, sm_start - offset - 1))
+            for kill in kill_list:
+                unused_ranges.remove(kill)
+            for add in add_list:
+                unused_ranges.append(add)
+        for ur in unused_ranges:
+            first, last = ur
+            new_co[(first, last - first + 1)] = offset
+    return new_co
+
+
+def day_5_cumulative_offsets_next_step_old(offsets: {}, step_mappings: [(int,)]) -> {}:
+    new_co = {}
+    print("===== NEW STEP =====")
+    for seed_range, current_offset in sorted(offsets.items()):
+        print(f"Before: {seed_range=}, {current_offset=}")
+        start_seed, range_length = seed_range
+
+        divisions = []
+        for mapping_range in step_mappings:
+            if mapping_range == (45, 77, 23) and seed_range[0] == 79:
+                print("debug")
+            if mapping_range[1] <= start_seed + current_offset and \
+                    sum(mapping_range[1:]) >= start_seed + current_offset + range_length:
+                new_co[seed_range] = current_offset + mapping_range[0] - mapping_range[1]
+                print(f"\tWhole seed range {seed_range} with {current_offset=} falls within mapping range {mapping_range}")
+                break
+            else:
+                os_map_start, os_map_end = mapping_range[1], sum(mapping_range[1:]) - 1
+                print(f"\t{mapping_range=} --> {os_map_start} {os_map_end}")
+                for end_point, is_start in zip((os_map_start, os_map_end), (True, False)):
+                    if start_seed + current_offset <= end_point < start_seed + current_offset + range_length:
+                        divisions.append((end_point, is_start,
+                                          mapping_range[0] - mapping_range[1] + (not is_start)))
+        if not divisions and seed_range not in new_co:
+            new_co[seed_range] = offsets[seed_range]
+        elif divisions:
+            divisions = sorted(divisions, key=lambda d: d[0])
+            change_offset = (not divisions[0][1]) or \
+                            (divisions[0][1] and divisions[0][0] == start_seed + current_offset)
+            print(f"--> {divisions=}")
+            marker = start_seed
+            remaining_length = range_length
+            for ii, details in enumerate(divisions):
+                div_start, st, offset_change = details
+                if div_start > start_seed + current_offset:
+                    length = (div_start - start_seed - current_offset) if ii == 0 \
+                        else (div_start - divisions[ii - 1][0])
+                    if length:
+                        new_co[(marker, length)] = (current_offset + offset_change) \
+                            if change_offset else current_offset
+                    marker += length
+                    remaining_length -= length
+                change_offset = not change_offset
+            if remaining_length:
+                new_co[(marker, remaining_length)] = (current_offset + offset_change) \
+                            if change_offset else current_offset
+        print(f"After: {new_co}")
+    if not new_co:
+        new_co = offsets
+    assert sum(seeds for _, seeds in new_co.keys()) == \
+           sum(seeds for _, seeds in offsets.keys())
+    print(f"After: {new_co=}")
+    return new_co
+
+
+def day_5_ranges_overlap(r1: (int,), r2: (int,)) -> bool:
+    """tuples are the numbers you would give to range() function"""
+    r1_s, r1_e = r1
+    r2_s, r2_e = r2
+    r1_e -= 1
+    r2_e -= 1
+    if r1_e < r2_s or r2_e < r1_s:
+        return False
+    return True
+
+
+def day_5_is_seed(seed_id: int, seed_ranges: [(int,)]) -> bool:
+    return any(seed_min <= seed_id < seed_min + length
+               for seed_min, length in seed_ranges)
+
+
+def day_5_reverse_convert(list_of_vars: [(int,)], forward_source: int) -> int:
+    for vvv in list_of_vars:
+        fwd_src_start, _, length = vvv
+        if forward_source in range(fwd_src_start, fwd_src_start + length):
+            return day_5_reverse_range_function(vvv)(forward_source)
+    return forward_source
+
+
+def day_5_reverse_range_function(variables: (int,)) -> callable:
+    reverse_dest_start, forward_src_start, _ = variables
+    return lambda fwd_src: fwd_src + forward_src_start - reverse_dest_start
+
+
+def day_5_part_one(text: str = "") -> int:
+    seeds, mappings = day_5_load_data(text)
+    eventual_locations = []
+    for sd in seeds:
+        category_number = sd
+        for next_step in mappings:
+            category_number = day_5_convert(mappings[next_step], category_number)
+        eventual_locations.append(category_number)
+    return min(eventual_locations)
+
+
+def day_5_convert(list_of_vars: [(int,)], source: int) -> int:
+    for vvv in list_of_vars:
+        _, src_start, length = vvv
+        if source in range(src_start, src_start + length):
+            return day_5_range_function(vvv)(source)
+    return source
+
+
+def day_5_range_function(variables: (int,)) -> callable:
+    dest_start, src_start, _ = variables
+    return lambda source: source + dest_start - src_start
+
+
+def day_5_load_data(text: str = "") -> ([int,], {}):
+    if not text:
+        text = Puzzle23(5).get_text_input().strip("\n")
+    seeds = [int(s) for s in
+             re.match(r"seeds: ([0-9]|\s)+", text).group().strip().split(" ")
+             if s.isnumeric()]
+    mappings = {"seed": []}
+    map_finder = re.finditer(r"\n.+ map:\n", text)
+    for map_match in map_finder:
+        destination = re.search(r"-\w+\s", map_match.group()).group().strip("- ")
+        raw_numbers = re.search(r"([0-9]|\s)+", text[map_match.end():]).group().strip()
+        mappings[destination] = [tuple(int(nn) for nn in rn.split(" "))
+                                 for rn in raw_numbers.split("\n")]
+    assert len(mappings) == 8
+    return seeds, mappings
+
+
+def day_4_part_two(text: str = "") -> int:
+    if not text:
+        text = Puzzle23(4).get_text_input().strip("\n")
+    card_pile = (t for t in text.split("\n"))
+    last_card = int(re.findall(r"\d+:", text)[-1][:-1])
+    instance_counter = {c: 1 for c in range(1, last_card + 1)}
+    for card_no in range(1, last_card + 1):
+        winners = day_4_count_winners(next(card_pile))
+        for c_id_increment in range(1, winners + 1):
+            instance_counter[card_no + c_id_increment] += instance_counter[card_no]
+    return sum(instance_counter.values())
+
+
+def day_4_part_one(text: str = "") -> int:
+    if not text:
+        text = Puzzle23(4).get_text_input().strip("\n")
+    return sum(day_4_score_card(card) for card in text.split("\n"))
+
+
+def day_4_score_card(card_text: str) -> int:
+    winners = day_4_count_winners(card_text)
+    return 2 ** (winners - 1) if winners else 0
+
+
+def day_4_count_winners(card_text: str) -> int:
+    useful_part = card_text[card_text.index(":") + 1:]
+    w, _, g = useful_part.partition("|")
+    winners, got = (set(int(n) for n in re.findall(r"\d+", nos)) for nos in (w, g))
+    return len(winners.intersection(got))
+
+
+def day_3_part_two(text: str = "") -> int:
+    if not text:
+        text = Puzzle23(3).get_text_input().strip("\n")
+    grid = text.split("\n")
+    asterisks = day_3_find_all_asterisks(grid)
+    gear_ratios = []
+    for ast in asterisks:
+        part_nos = []
+        for row_id in (ast.x - 1, ast.x + 1):
+            if 0 <= row_id < len(grid):
+                re_matches_in_adjacent_row = [*re.finditer(r"\d+", grid[row_id])]
+                for m in re_matches_in_adjacent_row:
+                    if m.start() in range(ast.y - 1, ast.y + 2) or \
+                            m.end() in range(ast.y, ast.y + 2) or \
+                            {*range(ast.y - 1, ast.y + 2)}.issubset({*range(m.start(), m.end())}):
+                        part_nos.append(m.group())
+        matches_in_this_row = [*re.finditer(r"\d+", grid[ast.x])]
+        for mtr in matches_in_this_row:
+            if mtr.end() == ast.y or mtr.start() == ast.y + 1:
+                part_nos.append(mtr.group())
+        if len(part_nos) == 2:
+            gear_ratios.append(int(part_nos[0]) * int(part_nos[1]))
+    return sum(gear_ratios)
+
+
+def day_3_find_all_asterisks(grid: [lib.Point]) -> [lib.Point]:
+    return [lib.Point(x, start_y)
+            for x, row in enumerate(grid)
+            for start_y in
+            (m.start() for m in re.finditer(r"\*", row))]
+
+
+def day_3_part_one(text: str = "") -> int:
+    if not text:
+        text = Puzzle23(3).get_text_input().strip("\n")
+    grid = text.split("\n")
+    valid_part_nos = []
+    for row_id, row in enumerate(grid):
+        print(row)
+        for match in re.finditer(r"\d+", row):
+            print(f"{match.group()} starts at {match.start()}, ends at {match.end()}", end=", ")
+            neighbours = set()
+            start, end = (func() for func in (match.start, match.end))
+            end -= 1
+            neighbours.update(lib.get_all_neighbours_in_grid(lib.Point(row_id, start), grid))
+            neighbours.update(lib.get_all_neighbours_in_grid(lib.Point(row_id, end), grid))
+            neighbours.update([lib.Point(rr, cc)
+                               for rr in (row_id - 1, row_id + 1)
+                               for cc in range(start + 2, end - 1)
+                               if 0 <= rr < len(grid) and 0 <= cc < len(grid[0])])
+            neighbours = {*filter(lambda n: n.x != row_id
+                                            or n.y not in range(start, end + 1), neighbours)}
+            print(neighbours)
+            if any(not grid[neigh.x][neigh.y].isnumeric() and
+                   grid[neigh.x][neigh.y] != "." for neigh in neighbours):
+                valid_part_nos.append(int(match.group()))
+    return sum(valid_part_nos)
+
+
+def day_2_part_two(text: str = "") -> int:
+    all_games = day_2_load_game_text(text)
+    limits = {"red": 12, "green": 13, "blue": 14}   # lazily copied - don't need limits
+
+    def get_power(game_contents: [{}]) -> int:
+        power = 1
+        for colour in limits:
+            power *= max(pick[colour] if colour in pick else 0 for pick in game_contents)
+        return power
+    return sum(get_power(g) for g in all_games.values())
+
+
+def day_2_part_one(text: str = "") -> int:
+    all_games = day_2_load_game_text(text)
+    limits = {"red": 12, "green": 13, "blue": 14}
+
+    def game_is_possible(game_id: int) -> bool:
+        picks = all_games[game_id]
+        for p in picks:
+            for colour, quantity in p.items():
+                if quantity > limits[colour]:
+                    return False
+        return True
+
+    return sum(
+        k for k in all_games.keys()
+        if game_is_possible(k)
+    )
+
+
+def day_2_load_game_text(text: str = "") -> {}:
+    if not text:
+        text = Puzzle23(2).get_text_input().strip("\n")
+    games = {}
+    lines = text.split("\n")
+    for line in lines:
+        game_no = int(re.search(r"\d+:", line).group()[:-1])
+        _, _, details = line.partition(": ")
+        picks = []
+        for selection in details.split("; "):
+            this_pick = {}
+            for cubes in selection.split(", "):
+                number, _, colour = cubes.partition(" ")
+                this_pick[colour] = int(number)
+            picks.append(this_pick)
+        games[game_no] = picks
+    return games
+
+
+def day_1_part_two(text: str = "") -> int:
+    if not text:
+        text = Puzzle23(1).get_text_input()
+    numbers = {
+        "one": 1,
+        "two": 2,
+        "three": 3,
+        "four": 4,
+        "five": 5,
+        "six": 6,
+        "seven": 7,
+        "eight": 8,
+        "nine": 9,
+    }
+    solution = 0
+    base_search = r"\d|" + "|".join(numbers.keys())
+    for line in text.split("\n"):
+        if not line:
+            break
+        first, last = (day_1_find_number(line, fl, re_search)
+                       for fl, re_search
+                       in zip(range(1, -1, -1),
+                              (base_search, f"(?=({base_search}))")))
+        print(line, end="")
+        first, last = (numbers[x] if not x.isnumeric() else int(x) for x in (first, last))
+        print(" --> ", first, last)
+        solution += (10 * first) + last
+    return solution
+
+
+def day_1_part_one(text: str = "") -> int:
+    if not text:
+        text = Puzzle23(1).get_text_input()
+    return sum([
+        sum(10 ** f * day_1_find_number(line, f) for f in range(1, -1, -1))
+        for line in text.split("\n")])
+
+
+def day_1_find_number(whole_line: str, first: bool | int = True,
+                      search_term: str = "") -> int | str:
+    if whole_line:
+        if search_term:
+            if first:
+                return re.search(search_term, whole_line).group()
+            else:
+                return re.findall(search_term, whole_line)[-1]
+        else:
+            return int(re.search(r"\d", whole_line[::1 if first else -1]).group())
+    return 0
+
