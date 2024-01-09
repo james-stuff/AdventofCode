@@ -14,6 +14,351 @@ class Puzzle23(Puzzle):
             return input_file.read()
 
 
+day_18_distance_moves = {
+    "R": lambda p, d: lib.Point(p.x, p.y + d),
+    "L": lambda p, d: lib.Point(p.x, p.y - d),
+    "U": lambda p, d: lib.Point(p.x - d, p.y),
+    "D": lambda p, d: lib.Point(p.x + d, p.y),
+}
+
+
+def day_18_part_two() -> int:
+    corners = day_18_find_corners(
+        Puzzle23(18).get_text_input().strip("\n"), for_part_two=True)
+    return day_18_find_total_area(corners)
+
+
+def day_18_find_corners(text: str, for_part_two: bool = True) -> [lib.Point]:
+    corners = []
+    point = lib.Point(0, 0)
+    for line in text.split("\n"):
+        p1_info, _, hex_string = line.partition(" (")
+        if for_part_two:
+            direction, distance = day_18_hex_to_dig_instruction(hex_string.strip(")"))
+        else:
+            direction, _, distance = p1_info.partition(" ")
+            distance = int(distance)
+        point = day_18_distance_moves[direction](point, distance)
+        assert point not in corners
+        corners.append(point)
+    return corners
+
+
+def day_18_find_total_area(corners: set) -> int:
+    x_range, y_range = (tuple(func(dim(pt) for pt in corners)
+                              for func in (min, max))
+                        for dim in (lambda p: p.x, lambda p: p.y))
+    area = 0
+    rows_with_corners = {point.x for point in corners}
+    previous_row = 0
+    active_ranges = []
+    print("\nRows with corners:")
+    for rwc in sorted(rows_with_corners):
+        area += sum(ar[1] - ar[0] + 1 for ar in active_ranges) * (rwc - previous_row)
+        print(f"ROW: {rwc}")
+        if rwc == 5:
+            print("dbg")
+        y_bounds = sorted(cnr.y for cnr in filter(lambda c: c.x == rwc, corners))
+        for edge_start, edge_end in ((yb, y_bounds[(i * 2) + 1])
+                                     for i, yb in enumerate(y_bounds[::2])):
+            """Disproved assumption: at least one corner of an edge would match up 
+                with an active range.  But what if it is entirely WITHIN an active
+                range, like the n-shape test?
+                Relevant range filter doesn't even pick this up.  What are the 
+                    scenarios?  Wholly within, or one end poking out?  Possible?"""
+            relevant_range = [*filter(
+                lambda ar: any(c in ar for c in (edge_start, edge_end)) or
+                           all(ar[0] < c < ar[1] for c in (edge_start, edge_end)),
+                active_ranges)]
+            if relevant_range:
+                if relevant_range[0] == (edge_start, edge_end):
+                    active_ranges.remove(relevant_range[0])
+                    area += edge_end - edge_start + 1
+                    continue
+                rr_start, rr_end = relevant_range[0]
+                new_ranges = []
+                extend = edge_start < rr_start or edge_end > rr_end
+                print(f"\t{extend=}")
+                if extend:
+                    new_ranges.append((edge_start, rr_end)
+                                      if edge_start < rr_start else (rr_start, edge_end))
+                else:
+                    if all(relevant_range[0][0] < c < relevant_range[0][1]
+                           for c in (edge_start, edge_end)):
+                        """wholly within: remove the relevant range 
+                            and add TWO new ranges"""
+                        new_ranges.append((relevant_range[0][0], edge_start))
+                        new_ranges.append((edge_end, relevant_range[0][1]))
+                        area -= 1
+                    else:
+                        new_ranges.append((edge_end, rr_end) if rr_start < edge_end < rr_end
+                                          else (rr_start, edge_start))
+                    area += edge_end - edge_start
+                active_ranges.remove(relevant_range[0])
+                for nr in new_ranges:
+                    active_ranges.append(nr)
+            else:
+                active_ranges.append((edge_start, edge_end))
+        active_ranges = sorted(active_ranges, key=lambda a: a[0])
+        if any(ar[0] == active_ranges[i][1] for i, ar in enumerate(active_ranges[1:])):
+            print("We have coalescence")
+            new_ar = []
+            for ind, acr in enumerate(active_ranges):
+                if ind > 0 and acr[0] == active_ranges[ind - 1][1]:
+                    new_ar[-1] = (new_ar[-1][0], acr[1])
+                else:
+                    new_ar.append(acr)
+            active_ranges = new_ar
+        print(f"\t{active_ranges=}")
+        assert not (len(y_bounds) % 2)
+        previous_row = rwc
+    return area
+
+
+def day_18_hex_to_dig_instruction(raw_hex: str) -> (str, int):
+    direction = "RDLU"[int(raw_hex[-1])]
+    return direction, int(raw_hex[1:-1], 16)
+
+
+def day_18_part_one(text: str = "") -> int:
+    if not text:
+        text = Puzzle23(18).get_text_input().strip("\n")
+    return len(day_18_get_dug_out_points(text))
+
+
+def day_18_get_dug_out_points(text: str) -> set:
+    border, inner = (set() for _ in range(2))
+    x, y = 0, 0
+    all_directions = "URDL"
+    for instruction in text.split("\n"):
+        direction, _, steps = instruction[:instruction.index(" (")].partition(" ")
+        for _ in range(int(steps)):
+            x, y = point_moves_2023[direction](lib.Point(x, y))
+            border.add(lib.Point(x, y))
+            if lib.Point(x, y) in inner:
+                inner.remove(lib.Point(x, y))
+            inner_point = point_moves_2023[
+                all_directions[(all_directions.index(direction) + 1) % 4]](lib.Point(x, y))
+            if inner_point not in border:
+                inner.add(inner_point)
+    if len(border) > 100:
+        print("border traversed")
+    assert not border.intersection(inner)
+    return day_18_flood_fill_inside(border, inner)
+
+
+def day_18_flood_fill_inside(border: set, inner: set) -> set:
+    min_space, max_space = (func(func(pt) for pt in border) for func in (min, max))
+    print(f"{min_space=}, {max_space=}")
+    for x in range(min_space, max_space + 1):
+        for y in range(min_space, max_space + 1):
+            point = lib.Point(x, y)
+            if all(point not in group for group in (border, inner)):
+                for drn in "LU":
+                    if point_moves_2023[drn](point) in inner:
+                        inner.add(point)
+    return border | inner
+
+
+day_17_city = []
+
+
+def day_17_part_one(text: str = "") -> int:
+    day_17_load_city(text)
+    grid_size = len(day_17_city)
+    best = 0
+    diagonal_x, diagonal_y = 0, 0
+    for _ in range(grid_size - 1):
+        diagonal_y += 1
+        best += day_17_city[diagonal_x][diagonal_y]
+        diagonal_x += 1
+        best += day_17_city[diagonal_x][diagonal_y]
+    # print(f"{best=}")
+    assert best == 133
+    states = [(0, 0, "R", 0), (0, 0, "D", 0)]
+    while states:
+        states = day_17_next_turn(states)
+        print(f"{len(states)} states -> ", end="")
+        # states = [*filter(
+        #     lambda st: day_17_best_case_heat_loss(st, grid_size) < best,
+        #     states)]
+        # current_best = min(day_17_best_case_heat_loss(stt, grid_size) for stt in states)
+        # if current_best < best:
+        #     print(f"\nNew best: {current_best}")
+        #     best = current_best
+        print(f"{len(states)}")
+        if len(states) > 1_000_000:
+            break
+    scores = {state[-1] for state in states}
+    print(sorted(scores))
+    return best
+
+
+def day_17_best_case_heat_loss(state: tuple, grid_size: int) -> int:
+    x, y, _, heat_loss_so_far = state[-4:]
+    min_steps = lib.manhattan_distance(lib.Point(x, y),
+                                       lib.Point(*(grid_size - 1 for _ in range(2))))
+    return heat_loss_so_far + min_steps
+
+
+def day_17_next_turn(all_states: [()]) -> [()]:
+    directions = "URDL"
+    grid_size = len(day_17_city)
+    next_states = []
+    for state in all_states:
+        x, y, facing, heat_loss_so_far = state[-4:]
+        turns_so_far = state[:-4]
+        x, y = point_moves_2023[facing](lib.Point(x, y))
+        heat_loss_so_far += day_17_city[x][y]
+        for turn in range(3):
+            new_facing = facing
+            if turns_so_far[-3:] != (turn for _ in range(3)):
+                if turn:
+                    if turn == 1:
+                        new_facing = directions[(directions.index(facing) - 1) % 4]
+                    if turn == 2:
+                        new_facing = directions[(directions.index(facing) + 1) % 4]
+                next_location = point_moves_2023[new_facing](lib.Point(x, y))
+                if all(0 <= co_ord < grid_size for co_ord in next_location):
+                    next_states.append((*turns_so_far, turn, x, y, new_facing, heat_loss_so_far))
+    return sorted(next_states, key=lambda ns: ns[-1])
+
+
+def day_17_load_city(text: str = ""):
+    global day_17_city
+    if not text:
+        text = Puzzle23(17).get_text_input().strip("\n")
+    day_17_city = [[int(num) for num in line] for line in text.split("\n")]
+
+
+day_16_grid = []
+day_16_energised = set()
+day_16_deja_vu = set()
+
+
+def day_16_part_two(text: str = "") -> int:
+    global day_16_grid
+    day_16_grid = day_16_load_grid(text)
+    most_energised = 0
+    grid_size = len(day_16_grid)
+    directions = "DLUR"
+    for di, drn in enumerate(directions):
+        for line_no in range(grid_size):
+            start_edge = grid_size if drn in "LU" else -1
+            origin = lib.Point(line_no, start_edge) if di % 2 \
+                else lib.Point(start_edge, line_no)
+            day_16_trace_ray_until_exit(origin, drn)
+            if len(day_16_energised) > most_energised:
+                most_energised = len(day_16_energised)
+            day_16_reset_globals()
+    return most_energised
+
+
+def day_16_part_one(text: str = "") -> int:
+    global day_16_grid
+    day_16_grid = day_16_load_grid(text)
+    day_16_trace_ray_until_exit(lib.Point(0, -1), "R")
+    for row in range(len(day_16_grid)):
+        print("")
+        for col in range(len(day_16_grid[0])):
+            symbol = "#" if lib.Point(row, col) in day_16_energised else "."
+            print(symbol, end="")
+    return len(day_16_energised)
+
+
+def day_16_load_grid(text: str = "") -> [[]]:
+    day_16_reset_globals()
+    if not text:
+        text = Puzzle23(16).get_text_input().strip("\n")
+    return text.split("\n")
+
+
+def day_16_reset_globals():
+    global day_16_energised, day_16_deja_vu
+    day_16_energised, day_16_deja_vu = (set() for _ in range(2))
+
+
+def day_16_trace_ray_until_exit(location: lib.Point, facing: str):
+    edge = len(day_16_grid)
+    while True:
+        day_16_deja_vu.add((location, facing))
+        if all(co > -1 for co in location):
+            day_16_energised.add(location)
+        location = point_moves_2023[facing](location)
+        if all(0 <= co_ord < edge for co_ord in (location.x, location.y)):
+            mirror = day_16_grid[location.x][location.y]
+            if mirror in r"\/":
+                reflection_pairs = ["DR", "UL"] if mirror == "\\" else ["DL", "UR"]
+                facing = [d for rp in reflection_pairs
+                          for d in rp
+                          if facing in rp and d != facing][0]
+            elif facing + mirror in ("U-", "D-", "L|", "R|"):
+                all_directions = "DLUR"     # gave DIFFERENT result to URDL before separating the deja-vu check from in-grid check
+                new_facings = "".join(d for i, d in enumerate(all_directions)
+                                      if i % 2 != all_directions.index(facing) % 2)
+                for nf in new_facings:
+                    day_16_trace_ray_until_exit(location, nf)
+                break
+        else:
+            break
+        if (location, facing) in day_16_deja_vu:
+            break
+
+
+def day_15_part_two(text: str = "") -> int:
+    if not text:
+        text = Puzzle23(15).get_text_input()
+    boxes = {n: [] for n in range(256)}
+    for step in text.split(","):
+        step = step.strip("\n")
+        label = re.search(r"\w+", step).group()
+        box_id = day_15_string_hash(label)
+        operation = step[len(label)]
+        print(f"{label=}, {operation=} -> Box {box_id}")
+        current_contents = boxes[box_id]
+        print(f"\t{current_contents} --> ", end="")
+        existing_instances = [lens for lens in current_contents if lens[0] == label]
+        assert len(existing_instances) < 2
+        if operation == "-":
+            if existing_instances:
+                current_contents.remove(existing_instances[0])
+        elif operation == "=":
+            if existing_instances:
+                existing_lens = existing_instances[0]
+                index = current_contents.index(existing_lens)
+                existing_lens = existing_lens[0], int(step[-1])
+                current_contents[index] = existing_lens
+            else:
+                current_contents.append((label, int(step[-1])))
+        boxes[box_id] = current_contents
+        print(boxes[box_id])
+    return sum(
+        (box_no + 1) * (i + 1) * c[1]
+        for box_no, contents in boxes.items()
+        for i, c in enumerate(contents)
+    )
+
+
+def day_15_part_one(text: str = "") -> int:
+    if not text:
+        text = Puzzle23(15).get_text_input()
+    return sum(day_15_string_hash(step.strip("\n")) for step in text.split(","))
+
+
+def day_15_string_hash(whole_string: str) -> int:
+    current_value = 0
+    for ch in whole_string:
+        current_value = day_15_single_character_hash(ch, current_value)
+    return current_value
+    # return reduce(lambda ch, next_ch: day_15_single_character_hash(), whole_string)
+
+
+def day_15_single_character_hash(char: str, current_value: int = 0) -> int:
+    current_value += ord(char)
+    current_value *= 17
+    return current_value % 256
+
+
 def day_14_part_two(text: str = "") -> int:
     board = day_14_load_board(text)
     load_history = {}
@@ -176,22 +521,109 @@ def day_13_load_grids(text: str = "") -> [str]:
     return [sub_grid.split("\n") for sub_grid in text.split("\n\n")]
 
 
-def day_12_count_possible_arrangements(damaged_record: str) -> int:
+def day_12_count_all_possible_arrangements(damaged_record: str) -> int:
     if " " not in damaged_record:
         return 0
+    return day_12_count_possibilities_for_subsection(*day_12_get_record_details(damaged_record))
+
+
+def day_12_get_record_details(damaged_record: str) -> (str, [int]):
     sequence, _, groups_data = damaged_record.partition(" ")
     group_lengths = [int(gl) for gl in groups_data.split(",")]
-    min_sequence_length = sum(group_lengths) + len(group_lengths) - 1
-    if len(sequence) < min_sequence_length:
-        return 0
-    elif len(sequence) == min_sequence_length:
+    return sequence, group_lengths
+
+
+def day_12_count_possibilities_for_subsection(subsection: str, groups: [int]) -> int:
+    min_subsection_length = sum(groups) + len(groups) - 1
+    if len(subsection) < min_subsection_length:
+        assert False
+    elif len(subsection) == min_subsection_length:
         return 1
-    """could recursively call on smaller sub-sequences"""
-    for hashes, length in zip(re.finditer(r"#+", damaged_record), group_lengths):
-        if len(hashes.group()) == length:
-            print(f"{damaged_record=} has a fixed #-group of {length=}")
-            # won't work because some #-groups can be hidden
-    return 0
+    unknowns = [*re.finditer(r"\?+", subsection)]
+    print(unknowns)
+    # find known fixed groups, starting from each end:
+    known_starts = [*re.finditer(r"\.#|^#", subsection)]
+    known_ends = [*re.finditer(r"#\.|#$", subsection)]
+    print(known_starts, known_ends)
+    for ks in known_starts:
+        start = ks.start()
+        if ks.group()[0] == ".":
+            start += 1
+        if start < groups[0] + 1:
+            subsection = "." * start + "#" * groups[0] + "."
+            print(subsection)
+    return 1
+
+
+def day_12_find_known_starts(section: str, hash_groups: [int]) -> int:
+    """First, use social distancing to get first and last possible starts"""
+    start_params = []
+    for gi, hg in enumerate(hash_groups):
+        min_start = day_12_min_space(hash_groups[:gi])
+        max_start = len(section) - day_12_min_space(hash_groups[gi + 1:]) - hg
+        start_params.append((min_start, max_start))
+    known_starts = [ks.start() + ks.group().startswith(".")
+                    for ks in re.finditer(r"\.#|^#", section)]
+    known_ends = [ks.start()
+                  for ks in re.finditer(r"#\.|#$", section)]
+    # print(f"{known_starts=}, {known_ends=}")
+    """Can known starts and ends of hash-strings help?"""
+    for s in known_starts:
+        found_params = [*filter(lambda sp: s in range(*sp) or s == sp[1], start_params)]
+        if len(found_params) == 1:
+            sp_ind = start_params.index(found_params[0])
+            start_params[sp_ind] = (s, s)
+    for e in known_ends:
+        found_params = [*filter(lambda sp_hg: e - sp_hg[1] + 1 in range(*sp_hg[0]) or
+                                              e - sp_hg[1] + 1 == sp_hg[0][1],
+                                zip(start_params, hash_groups))]
+        if len(found_params) == 1:
+            sp_ind = start_params.index(found_params[0][0])
+            group_length = hash_groups[sp_ind]
+            start_params[sp_ind] = (e - group_length + 1, e - group_length + 1)
+    if all(sp[0] == sp[1] for sp in start_params):
+        return 1
+    """How about known hash positions?"""
+    known_hash_strings = [hs.span() for hs in re.finditer(r"#+", section)]
+    # CAUTION: span() end is index of last # PLUS 1
+    # this is a long way from working yet . . .
+    for sp, length in zip(start_params, hash_groups):
+        possible_hs = [*filter(lambda khs: sp[0] < khs[0] < sp[1] + length - 1,
+                               known_hash_strings)]
+        if len(possible_hs) == 1 and possible_hs[0][1] - possible_hs[0][0] == length:
+            new_sp = tuple(possible_hs[0][0] for _ in range(2))
+            start_params[start_params.index(sp)] = new_sp
+    print(f"{known_hash_strings=}")
+    print(f"\t{start_params=}")
+
+
+def day_12_min_space(hash_groups: [int], at_end: bool = True) -> int:
+    return sum(hash_groups) + len(hash_groups) + (not at_end)
+
+
+def day_12_break_down_from_end(section: str, groups: [int], reverse: bool = False) -> str:
+    new_section = ""
+    known_starts = [*re.finditer(r"\.#|^#", section)]
+    known_ends = [*re.finditer(r"#\.|#$", section)]
+    ks_1 = known_starts[0].start() + (known_starts[0].group().startswith("."))
+    if ks_1 < groups[0] + 1:
+        new_section = section[:ks_1] + "#" * groups[0] + "." + \
+                      section[ks_1 + groups[0] + 1:]
+        print(f"will return {new_section}")
+    return section
+
+
+def day_12_combinations_per_unknown_section(section_length: int, groups: [int]) -> int:
+    """needs to be just the section_length in which group is free to move.
+        External social distancing needs to be handled outside this function"""
+    if len(groups) == 1:
+        group_length = groups[0]
+        return section_length - group_length + 1
+    else:
+        return sum(day_12_combinations_per_unknown_section(
+            section_length - (groups[0] + n + 1), groups[1:]
+        )
+                   for n in range(section_length - sum(groups[1:]) - len(groups[1:])))
 
 
 def day_11_part_two(text: str = "", expansion_factor: int = 1_000_000) -> int:
@@ -244,15 +676,83 @@ point_moves_2023 = {
 day_10_map = {}
 
 
+def day_10_part_two(text: str = "") -> int:
+    day_10_load_map(text)
+    s_point = lib.Point(*[pt for pt, symbol in day_10_map.items() if symbol == "S"][0])
+    pipe, _ = day_10_trace_pipe_from(s_point)
+    known_inside_points = day_10_all_inside_edge_points(pipe)
+    return day_10_count_enclosed_by_flood_fill(known_inside_points, pipe)
+
+
+def day_10_count_enclosed_by_flood_fill(inside: {(int,)}, pipe: [(int,)]) -> int:
+    def joins(point: lib.Point, clump: set) -> bool:
+        """This works because points hidden within the already-known enclosed
+            border points already have such points to the left of and above them"""
+        for drn in "LU":
+            if point_moves_2023[drn](point) in clump:
+                return True
+        return False
+    grid_max = max(max(k) for k in day_10_map.keys())
+    for x in range(grid_max + 1):
+        for y in range(grid_max + 1):
+            point = lib.Point(x, y)
+            if (point not in day_10_map) or (point not in pipe):
+                if joins(point, inside):
+                    print(f"{x}, {y} joins inside set")
+                    inside.add(point)
+    return len(inside)
+
+
+def day_10_all_inside_edge_points(pipe: [(int,)]) -> set:
+    moves_to_inner_points = {
+        ("F", "D"): ["RD"],
+        ("F", "R"): ["L", "U"],
+        ("-", "L"): ["D"],
+        ("-", "R"): ["U"],
+        ("7", "L"): ["LD"],
+        ("7", "D"): ["R", "U"],
+        ("|", "D"): ["R"],
+        ("|", "U"): ["L"],
+        ("J", "L"): ["D", "R"],
+        ("J", "U"): ["LU"],
+        ("L", "U"): ["L", "D"],
+        ("L", "R"): ["UR"],
+    }
+    """Don't know whether pipe is being traversed clockwise or anti-clockwise, 
+        so do one traverse in each direction, and the true inner set will be 
+        the smaller one"""
+    set_1, set_2 = (set() for _ in range(2))
+    for recipient_set, pipe_journey in zip((set_1, set_2), (pipe, pipe[::-1])):
+        for i, this_pipe_point in enumerate(pipe_journey):
+            next_pipe_point = pipe_journey[(i + 1) if i < len(pipe_journey) - 1 else 0]
+            # print(day_10_map[next_pipe_point], end=" ")
+            next_section = day_10_map[next_pipe_point]
+            move_going_out_of = [*filter(
+                lambda d: day_10_get_next_location_round(next_pipe_point, this_pipe_point) ==
+                          point_moves_2023[d](next_pipe_point), "UDLR")][0]
+            # print(move_going_out_of, end="")
+            if next_section == "S":
+                break
+            # print(f"\n{next_pipe_point=}, {move_going_out_of=} --> ", end="")
+            for path in moves_to_inner_points[(next_section, move_going_out_of)]:
+                point = lib.Point(*next_pipe_point)
+                for mv in path:
+                    point = point_moves_2023[mv](point)
+                # print(f"{point}, ", end="")
+                if point not in day_10_map or point not in pipe_journey:
+                    recipient_set.add(point)
+    print(len(set_1), len(set_2))
+    return min((set_1, set_2), key=lambda s: len(s))
+
+
 def day_10_part_one(text: str = "") -> int:
     day_10_load_map(text)
     found_loops, found_incomplete_pipes = [], []
-    s_point = [pt for pt, symbol in day_10_map.items() if symbol == "S"][0]
-    point = lib.Point(*s_point)
-    if point in day_10_map and all(point not in s for s in
+    s_point = [lib.Point(*pt) for pt, symbol in day_10_map.items() if symbol == "S"][0]
+    if s_point in day_10_map and all(s_point not in s for s in
                                    (found_loops, found_incomplete_pipes)):
-        pipe, is_loop = day_10_trace_pipe_from(point)
-        print(f"Returned pipe: {pipe}")
+        pipe, is_loop = day_10_trace_pipe_from(s_point)
+        # print(f"Returned pipe: {pipe}")
         if is_loop:
             found_loops.append(pipe)
         elif len(pipe) > 1:
@@ -264,9 +764,13 @@ def day_10_part_one(text: str = "") -> int:
 def day_10_trace_pipe_from(starting_location: (int,)) -> ([], bool):
     complete_loop = False
     visited = []
-    valid_neighbours = [day_10_get_next_location_round(
-        starting_location, point_moves_2023[dirn](starting_location))
-        for dirn in "ULDR"]
+    # valid_neighbours = [day_10_get_next_location_round(
+    #     starting_location, point_moves_2023[dirn](starting_location))
+    #     for dirn in "DULR"]
+    valid_neighbours = [*filter(lambda loc:
+                                loc in day_10_map and
+                                day_10_is_connectable(starting_location, loc),
+        [point_moves_2023[dirn](starting_location) for dirn in "DLUR"])]
     if len(valid_neighbours) > 1:
         print(f"{starting_location} is possibly in a loop")
         visited.append(starting_location)
@@ -295,6 +799,9 @@ def day_10_get_next_location_round(location: (int,), previous: (int,)) -> (int,)
              "S": "URDL"}
     valid_neighbours = [point_moves_2023[drn](lib.Point(*location))
                         for drn in moves[current_section]]
+    if current_section == "S":
+        valid_neighbours = [*filter(lambda vn: day_10_is_connectable(location, vn),
+                                    valid_neighbours)]
     return [*filter(lambda vn: vn != lib.Point(*previous) and vn in day_10_map,
                     valid_neighbours)][0]
 
@@ -304,15 +811,19 @@ def day_10_is_connectable(loc_1: (int,), loc_2: (int,)) -> bool:
     invalid_moves = {pipe: pipe for pipe in "F7JL"}     # right-angle pipes cannot connect to other instance of themselves
     invalid_moves["|"] = "-"    # vertical cannot connect to horizontal and vice-versa
     invalid_moves["-"] = "|"
-    if loc_1 in day_10_map:
+    if all(location in day_10_map for location in (loc_1, loc_2)):
         first_pipe = day_10_map[loc_1]
         if first_pipe == "S":
-            return True
-        if loc_2 in day_10_map:
-            return day_10_map[loc_2] not in invalid_moves[first_pipe]
-        return False
-    print(f"Starting location {loc_1} isn't even in the map")
+            valid_next_sections = {"L": "-FL", "R": "-7J", "U": "|F7", "D": "|JL"}
+            direction = [k for k in point_moves_2023.keys()
+                         if point_moves_2023[k](loc_1) == loc_2][0]
+            return day_10_map[loc_2] in valid_next_sections[direction]
+        return day_10_map[loc_2] not in invalid_moves[first_pipe]
     return False
+
+
+def day_10_get_starting_point() -> lib.Point:
+    return lib.Point(*[pt for pt, symbol in day_10_map.items() if symbol == "S"][0])
 
 
 def day_10_load_map(text: str = ""):

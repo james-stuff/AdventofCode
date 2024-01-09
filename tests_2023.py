@@ -1,9 +1,278 @@
 import pprint
 import re
-
 import aoc_2023 as a23
 import library as lib
 from itertools import cycle
+
+
+class TestDay19:
+    example = """px{a<2006:qkq,m>2090:A,rfg}
+pv{a>1716:R,A}
+lnx{m>1548:A,A}
+rfg{s<537:gd,x>2440:R,A}
+qs{s>3448:A,lnx}
+qkq{x<1416:A,crn}
+crn{x>2662:A,R}
+in{s<1351:px,qqz}
+qqz{s>2770:qs,m<1801:hdj,R}
+gd{a>3333:R,R}
+hdj{m>838:A,pv}
+
+{x=787,m=2655,a=1222,s=2876}
+{x=1679,m=44,a=2067,s=496}
+{x=2036,m=264,a=79,s=2244}
+{x=2461,m=1339,a=466,s=291}
+{x=2127,m=1623,a=2188,s=1013}"""
+
+
+class TestDay18:
+    example = """R 6 (#70c710)
+D 5 (#0dc571)
+L 2 (#5713f0)
+D 2 (#d2c081)
+R 2 (#59c680)
+D 2 (#411b91)
+L 5 (#8ceee2)
+U 2 (#caa173)
+L 1 (#1b58a2)
+U 2 (#caa171)
+R 2 (#7807d2)
+U 3 (#a77fa3)
+L 2 (#015232)
+U 2 (#7a21e3)"""
+    conversion_table = """#70c710 = R 461937
+#0dc571 = D 56407
+#5713f0 = R 356671
+#d2c081 = D 863240
+#59c680 = R 367720
+#411b91 = D 266681
+#8ceee2 = L 577262
+#caa173 = U 829975
+#1b58a2 = L 112010
+#caa171 = D 829975
+#7807d2 = L 491645
+#a77fa3 = U 686074
+#015232 = L 5411
+#7a21e3 = U 500254"""
+
+    def test_setup(self):
+        dug = a23.day_18_get_dug_out_points(self.example)
+        assert lib.Point(0, 0) in dug
+        assert len(dug) == 62
+
+    def test_part_one(self):
+        assert a23.day_18_part_one(self.example) == 62
+        lib.verify_solution(a23.day_18_part_one(), 74074)
+
+    def test_hex_conversion(self):
+        for row in self.conversion_table.split("\n"):
+            raw, _, exp_str = row.partition(" = ")
+            drn, _, steps = exp_str.partition(" ")
+            assert a23.day_18_hex_to_dig_instruction(raw) == (drn, int(steps))
+
+    def test_finding_corners(self):
+        eg_corners = a23.day_18_find_corners(self.example, for_part_two=False)
+        assert len(eg_corners) == 14
+        assert lib.Point(0, 0) in eg_corners
+        assert lib.Point(5, 6) in eg_corners
+        p2_corners_from_example = a23.day_18_find_corners(self.example)
+        assert len(p2_corners_from_example) == 14
+        assert lib.Point(0, 0) in eg_corners
+
+    def test_finding_total_area_from_corners(self):
+        eg_corners = a23.day_18_find_corners(self.example, for_part_two=False)
+        assert a23.day_18_find_total_area(eg_corners) == 62
+        """find whether the adjacency of corners in list means something . . .
+            Scenarios on a new row:
+            - active range is SNIPPED from NEXT row:
+                <- corner 1 = start of active range, corner 2 within active range OR
+                    corner 2 = end of active range, corner 1 within active range
+            - active range is EXTENDED from THIS row:
+                <- corner 1 < start of active range, corner 2 = start OR
+                    corner 2 > end of active range, corner 1 = end
+            - new active range is CREATED on THIS row:
+                both corners are outside any active range
+            - active range is DELETED on NEXT row:
+                corners match end points of an active range
+                -> """
+        main_p1_corners = a23.day_18_find_corners(
+            a23.Puzzle23(18).get_text_input().strip("\n"), for_part_two=False)
+        assert a23.day_18_find_total_area(main_p1_corners) == a23.day_18_part_one()
+        p2_corners = a23.day_18_find_corners(
+            a23.Puzzle23(18).get_text_input().strip("\n"))
+
+        a23.day_18_find_total_area(p2_corners)
+
+    def draw_path(self, instructions: str):
+        x, y = 0, 0
+        path = {lib.Point(0, 0)}
+        for instruction in instructions.split(","):
+            direction, _, steps = instruction.partition(" ")
+            for _ in range(int(steps)):
+                x, y = a23.point_moves_2023[direction](lib.Point(x, y))
+                path.add(lib.Point(x, y))
+        for xx in range(min(p.x for p in path), max(p.x for p in path) + 1):
+            print("")
+            for yy in range(min(p.y for p in path), max(p.y for p in path) + 1):
+                print("#" if lib.Point(xx, yy) in path else " ", end="")
+
+    def test_more_complicated_structures(self):
+        shape = "R 1,D 1,R 1,D 1,R 3,U 1,R 1,U 1,R 1,D 1,R 1,D 1,R 1,D 1,L 9,U 3"
+        self.draw_path(shape)
+        corners = a23.day_18_find_corners(shape.replace(",", "\n"), for_part_two=False)
+        assert a23.day_18_find_total_area(corners) == 31
+        shape = "R 1,D 1,R 1,D 1,R 1,D 1,R 3,U 2,L 1,U 1,L 1,U 1,R 3,D 5,L 7,U 4"
+        self.draw_path(shape)
+        corners = a23.day_18_find_corners(shape.replace(",", "\n"), for_part_two=False)
+        assert a23.day_18_find_total_area(corners) == 38
+        long_coalascence = "R 1,D 1,R 15,U 1,R 1,D 2,L 17,U 2"
+        self.draw_path(long_coalascence)
+        corners = a23.day_18_find_corners(long_coalascence.replace(",", "\n"), for_part_two=False)
+        assert a23.day_18_find_total_area(corners) == 40
+        n_shape = "R 5,D 3,L 1,U 1,L 3,D 1,L 1,U 3"
+        self.draw_path(n_shape)
+        corners = a23.day_18_find_corners(n_shape.replace(",", "\n"), for_part_two=False)
+        assert a23.day_18_find_total_area(corners) == 22
+
+
+    def test_edge_parity_method_also_works_for_day_10_p2(self):
+        a23.day_10_load_map(a23.Puzzle23(10).get_text_input().strip("\n"))
+        s_point = lib.Point(*[pt for pt, symbol in a23.day_10_map.items() if symbol == "S"][0])
+        day_10_pipe, _ = a23.day_10_trace_pipe_from(s_point)
+
+    def test_part_two(self):
+        p2_solution = a23.day_18_part_two()
+        assert p2_solution < 435094080194504
+        lib.verify_solution(p2_solution, 112074045986829, part_two=True)
+
+
+class TestDay17:
+    example = """2413432311323
+3215453535623
+3255245654254
+3446585845452
+4546657867536
+1438598798454
+4457876987766
+3637877979653
+4654967986887
+4564679986453
+1224686865563
+2546548887735
+4322674655533"""
+
+    def test_load(self):
+        a23.day_17_load_city()
+        city_map = a23.day_17_city
+        dims = len(city_map), len(city_map[1])
+        assert dims[0] == dims[1]
+        print(f"City is {dims[0]} x {dims[1]} square")
+
+    def test_concept(self):
+        """State: *(turns so far), x, y, facing (U, D, L, R), heat loss so far"""
+        a23.day_17_load_city(self.example)
+        states = [(0, 0, "R", 0), (0, 0, "D", 0)]
+        for _ in range(2):
+            states = a23.day_17_next_turn(states)
+        pprint.pprint(states)
+        print(f"\nThere are {len(states)} states:")
+        a23.day_17_part_one(self.example)
+
+
+class TestDay16:
+    example_grid = r""".|...\....
+|.-.\.....
+.....|-...
+........|.
+..........
+.........\
+..../.\\..
+.-.-/..|..
+.|....-|.\
+..//.|...."""
+
+    def test_load(self):
+        grid = a23.day_16_load_grid(self.example_grid)
+        assert len(grid) == 10
+        assert all(len(rr) == 10 for rr in grid)
+        big_grid = a23.day_16_load_grid()
+        assert len(big_grid) == len(big_grid[1])
+        assert all(len(row) == len(big_grid) for row in big_grid)
+        print(f"Real grid is {len(big_grid)} x {len(big_grid)} square")
+
+    def test_ray_tracing(self):
+        a23.day_16_grid = a23.day_16_load_grid(self.example_grid)
+        a23.day_16_trace_ray_until_exit(lib.Point(0, 6), "L")
+        assert a23.day_16_energised == {lib.Point(0, 6), lib.Point(0, 5)}
+        a23.day_16_trace_ray_until_exit(lib.Point(9, 4), "L")
+        assert len(a23.day_16_energised) == 4
+        assert all(pt in a23.day_16_energised for pt in (lib.Point(9, 3), lib.Point(9, 4)))
+        a23.day_16_trace_ray_until_exit(lib.Point(1, 1), "U")
+        assert len(a23.day_16_energised) == 6
+        assert all(pt in a23.day_16_energised for pt in (lib.Point(1, 1), lib.Point(0, 1)))
+        a23.day_16_trace_ray_until_exit(lib.Point(3, 0), "R")
+        assert len(a23.day_16_energised) == 6 + 18
+        assert all(pt in a23.day_16_energised for pt in (lib.Point(0, 8), lib.Point(9, 8)))
+        assert lib.Point(3, 9) not in a23.day_16_energised
+        a23.day_16_trace_ray_until_exit(lib.Point(7, 2), "L")
+        assert len(a23.day_16_energised) == 6 + 18 + 3
+
+    def test_part_one(self):
+        assert a23.day_16_part_one(self.example_grid) == 46
+        p1_solution = a23.day_16_part_one()
+        assert p1_solution > 6840
+        lib.verify_solution(p1_solution, 7951)
+
+    def test_part_two(self):
+        assert a23.day_16_part_two(self.example_grid) == 51
+        p2_solution = a23.day_16_part_two()
+        assert p2_solution > 7951   # expecting > part one solution
+        lib.verify_solution(p2_solution, part_two=True)
+
+
+class TestDay15:
+    examples = """rn=1 becomes 30.
+cm- becomes 253.
+qp=3 becomes 97.
+cm=2 becomes 47.
+qp- becomes 14.
+pc=4 becomes 180.
+ot=9 becomes 9.
+ab=5 becomes 197.
+pc- becomes 48.
+pc=6 becomes 214.
+ot=7 becomes 231."""
+
+    def create_examples_table(self) -> dict:
+        return {
+            re.search(r"\S+\s", row).group().strip():
+                int(re.search(r" \d+", row).group()[1:])
+            for row in self.examples.split("\n")
+        }
+
+    def test_load(self):
+        pprint.pprint(self.create_examples_table())
+
+    def test_hashing(self):
+        assert a23.day_15_single_character_hash("H") == 200
+        assert a23.day_15_single_character_hash("A", 200) == 153
+        assert a23.day_15_single_character_hash("S", 153) == 172
+        assert a23.day_15_single_character_hash("H", 172) == 52
+        assert a23.day_15_string_hash("HASH") == 52
+        for word, expected in self.create_examples_table().items():
+            assert a23.day_15_string_hash(word) == expected
+
+    def test_part_one(self):
+        test_string = ",".join(self.create_examples_table().keys())
+        print(test_string)
+        assert a23.day_15_part_one(test_string) == 1320
+        lib.verify_solution(a23.day_15_part_one(), 506437)
+
+    def test_part_two(self):
+        test_string = ",".join(self.create_examples_table().keys())
+        assert a23.day_15_part_two(test_string) == 145
+        p2_solution = a23.day_15_part_two()
+        lib.verify_solution(p2_solution, 288521, part_two=True)
 
 
 class TestDay14:
@@ -178,19 +447,41 @@ class TestDay12:
         there could be zero possible arrangements?
         RULES:
         - don't move so that a # would cover a known spot (.)
-        - leave at least one space between every group
-        
-        - can you nail some of the groups down: if whole length of hashes shown
+        - distancing: leave at least one space between every group
+        - fixed ends: can you nail some of the groups down? 
+                If whole length of hashes shown
                 or if a .# boundary is shown?
         - work in from each end?
         - can be certain which group it is if it's within its own length + 1 from an end"""
 
+    def test_known_termination_points(self):
+        examples = self.example.split("\n")
+        # a23.day_12_count_possibilities_for_subsection(examples[0][:examples[0].index(" ")], [1])
+        # a23.day_12_count_possibilities_for_subsection("##..", [2])
+        test_section = ".##??##.#..."
+        # new = a23.day_12_break_down_from_end(test_section, [3, 2, 1])
+        a23.day_12_find_known_starts(test_section, [3, 2, 1])
+        for eg in examples:
+            print(eg)
+            print("\t", end="")
+            a23.day_12_find_known_starts(*a23.day_12_get_record_details(eg))
+        # assert len(new) == len(test_section)
+
     def test_grouping(self):
-        assert a23.day_12_count_possible_arrangements("") == 0
+        assert a23.day_12_count_all_possible_arrangements("") == 0
         test_lines = self.example.split("\n")
-        assert a23.day_12_count_possible_arrangements(test_lines[0]) == 1
-        for line in test_lines:
-            a23.day_12_count_possible_arrangements(line)
+        assert a23.day_12_combinations_per_unknown_section(4, [1]) == 4
+        assert a23.day_12_combinations_per_unknown_section(4, [2]) == 3
+        assert a23.day_12_combinations_per_unknown_section(4, [3]) == 2
+        assert a23.day_12_combinations_per_unknown_section(4, [4]) == 1
+        assert a23.day_12_combinations_per_unknown_section(3, [1, 1]) == 1
+        assert a23.day_12_combinations_per_unknown_section(7, [2, 1]) == 10
+        assert a23.day_12_combinations_per_unknown_section(2, [1]) == 2
+        correct_answers = [1, 4, 1, 1, 4, 10]
+        assert a23.day_12_count_all_possible_arrangements(test_lines[0]) == 1
+        for i, line in enumerate(test_lines):
+            print(f"Testing line: {line}")
+            assert a23.day_12_count_all_possible_arrangements(line) == correct_answers[i]
 
 
 class TestDay11:
@@ -256,6 +547,41 @@ LJ..."""
 SJLL7
 |F--J
 LJ.LJ"""
+    part_two_examples = ["""...........
+.S-------7.
+.|F-----7|.
+.||.....||.
+.||.....||.
+.|L-7.F-J|.
+.|..|.|..|.
+.L--J.L--J.
+...........""", """..........
+.S------7.
+.|F----7|.
+.||OOOO||.
+.||OOOO||.
+.|L-7F-J|.
+.|..||..|.
+.L--JL--J.
+..........""", """.F----7F7F7F7F-7....
+.|F--7||||||||FJ....
+.||.FJ||||||||L7....
+FJL7L7LJLJ||LJ.L-7..
+L--J.L7...LJS7F-7L7.
+....F-J..F7FJ|L7L7L7
+....L7.F7||L7|.L7L7|
+.....|FJLJ|FJ|F7|.LJ
+....FJL-7.||.||||...
+....L---J.LJ.LJLJ...""", """FF7FSF7F7F7F7F7F---7
+L|LJ||||||||||||F--J
+FL-7LJLJ||||||LJL-77
+F--JF--7||LJLJ7F7FJ-
+L---JF-JLJ.||-FJLJJ7
+|F|F-JF---7F7-L7L|7|
+|FFJF7L7F-JF7|JL---7
+7-L-JL7||F7|L7F-7F7|
+L.L7LFJ|||||FJL7||LJ
+L7JLJL-JLJLJL--JLJ.L"""]
 
     def test_load(self):
         a23.day_10_load_map(self.simple_loop)
@@ -281,6 +607,35 @@ LJ.LJ"""
         solution = a23.day_10_part_one()
         assert solution > 7101
         lib.verify_solution(solution, 7102)
+
+    def test_find_method_for_p2(self):
+        a23.day_10_load_map(self.part_two_examples[0])
+        s_point = a23.day_10_get_starting_point()
+        pipe, _ = a23.day_10_trace_pipe_from(s_point)
+        assert len(pipe) == 46
+        assert pipe[0] == s_point
+        inside_edge_points = a23.day_10_all_inside_edge_points(pipe)
+        print(inside_edge_points)
+        assert len(inside_edge_points) == 4
+        assert lib.Point(3, 3) not in inside_edge_points
+        assert lib.Point(6, 3) in inside_edge_points
+        a23.day_10_load_map(self.part_two_examples[1])
+        compressed_pipe, _ = a23.day_10_trace_pipe_from(s_point)
+        assert len(a23.day_10_all_inside_edge_points(compressed_pipe)) == 4
+        a23.day_10_load_map(self.part_two_examples[2])
+        s_point = a23.day_10_get_starting_point()
+        larger_pipe, _ = a23.day_10_trace_pipe_from(s_point)
+        assert larger_pipe[1] == lib.Point(4, 13)
+        enclosed = a23.day_10_all_inside_edge_points(larger_pipe)
+        print(enclosed)
+        assert len(enclosed) == 8
+
+    def test_part_two(self):
+        assert a23.day_10_part_two(self.part_two_examples[2]) == 8
+        assert a23.day_10_part_two(self.part_two_examples[3]) == 10
+        p2_solution = a23.day_10_part_two()
+        assert p2_solution > 229
+        lib.verify_solution(p2_solution, 363, part_two=True)
 
 
 class TestDay9:
