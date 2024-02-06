@@ -548,7 +548,6 @@ def day_12_dictionary_based_solution(springs: str, groups: [int]) -> int:
         return 1
     if all(c == "?" for c in springs):
         return day_12_count_possible_arrangements(springs, groups)
-        return day_12_combinations_per_unknown_section(len(springs), groups)
     group_limits = day_12_group_limits_by_social_distancing(springs, groups, return_max_end=True)
     print(f"{group_limits=}")
     if all(gl[1] == gl[0] + gr - 1 for gl, gr in zip(group_limits, groups)):
@@ -556,10 +555,8 @@ def day_12_dictionary_based_solution(springs: str, groups: [int]) -> int:
         return 1
     """Dictionary is {n: {possible group indices}} for each character position
         in springs.  Initially empty list for each one.
-        - work through groups in descending order of size.  If complete group
-            is found, or a group that cannot be any other, update lists accordingly
         - remove any position key that definitely cannot be a hash
-        - traverse springs from both ends to narrow it down further"""
+        - traverse springs from both ends to narrow it down further?"""
     def break_problem(gi_to_remove: int, springs_cutoffs: (int,)) -> int:
         cut_at, continue_from = springs_cutoffs
         if cut_at < 0:
@@ -581,8 +578,9 @@ def day_12_dictionary_based_solution(springs: str, groups: [int]) -> int:
     for k in range(len(springs)):
         if springs[k] == "#":
             dictionary[k] = {gi for gi in range(len(groups))
-                              if k in range(group_limits[gi][0], group_limits[gi][1] + 1)
-                              and is_enough_space(k, groups[gi])}
+                             if k in range(group_limits[gi][0],
+                                           group_limits[gi][1] + groups[gi])
+                             and is_enough_space(k, groups[gi])}
     """Find starts and/or ends to determine whole runs:"""
     for k in range(len(springs)):
         # known starts:
@@ -609,93 +607,6 @@ def day_12_dictionary_based_solution(springs: str, groups: [int]) -> int:
             return break_problem(gi, (max(0, min(definite_finds) - 1),
                                       max(definite_finds) + 2))
     return day_12_count_possible_arrangements(springs, groups)
-        # inferred blocks - GETS IT WRONG:
-        # if k in dictionary:
-        #     if len(dictionary[k]) == 1:
-        #         found_group_index = [*dictionary[k]][0]
-        #         possibles = [*filter(
-        #             lambda dk: found_group_index in dictionary[dk], dictionary)]
-        #         if max(possibles) - min(possibles) + 1 == groups[found_group_index]:
-        #             start = min(possibles)
-        #             print(f"INFERRED BLOCK: {min(possibles)}-{max(possibles)}")
-        #             return break_problem(
-        #                 found_group_index,
-        #                 (max(start - 1, 0), start + groups[found_group_index] + 1)
-        #             )
-        #     else:
-        #         for ind in dictionary[k]:
-        #             if sum([ind in dictionary[kk] for kk in dictionary]) == 1:
-        #                 dictionary[k] = {ind}
-        #                 break
-        #                 # TODO: This is interfering with the dict.  Could it bite me?
-    for k in range(len(springs)):
-        if springs[k] == "?":
-            dictionary[k] = {gi for gi in range(len(groups))
-                              if k in range(group_limits[gi][0], group_limits[gi][1] + 1)
-                              and is_enough_space(k, groups[gi])}
-    print(f"{dictionary=}")
-    if springs == "?.??#?#?#.????":
-        print("debug")
-    s_first = e_first = 0
-    while e_first - s_first < groups[0]:
-        s_first, e_first = day_12_get_contiguous_range(
-            dictionary, min(k for k in dictionary if k > e_first))
-    if e_first - s_first == len(springs):
-        print(f"It's all one big unknown!")
-        return day_12_combinations_per_unknown_section(len(springs), groups)
-    if e_first == max(dictionary) + 1:
-        return day_12_dictionary_based_solution(springs[s_first:e_first], groups)
-    # break off the first set and see how many groups I can get in?
-    max_gi = max(max(s) if s else 0
-                 for s in [v for k, v in dictionary.items() if k <= e_first])
-    for gri in range(len(groups)):
-        if gri > max_gi or e_first - s_first < day_12_min_space(groups[:gri + 1]) - 1:
-            sub_problems = [
-                (springs[s_first:e_first], groups[:gri]),
-                (springs[min(k for k in dictionary.keys() if k > e_first):], groups[gri:]),
-            ]
-            break
-    print(f"{sub_problems=}")
-    return math.prod(day_12_dictionary_based_solution(*sp) for sp in sub_problems)
-    for k in range(len(springs)):
-        if springs[k] == "?":
-            for i_grp in range(len(groups)):
-                if k in range(group_limits[i_grp][0], group_limits[i_grp][1] + 1):
-                    existing_possible_groups = [*dictionary[k]] if k in dictionary else []
-                    if is_enough_space(
-                            k, day_12_min_space(existing_possible_groups + [i_grp])):
-                        dictionary[k].add(i_grp)
-                    else:
-                        break
-
-    for long_group in sorted(groups, reverse=True):
-        continue
-        if long_group > 1 and groups.count(long_group) == 1:
-            next_longest = max(0, *(gr if gr < long_group else 0 for gr in groups))
-            matches = [m for m in re.finditer("#+", springs)
-                       if long_group >=
-                       m.end() - m.start() >
-                       next_longest]
-            if len(matches) == 1:
-                if matches[0].end() - matches[0].start() == long_group:
-                    # whole group is found, so remove it and adjoining spaces
-                    # todo: also remove group from groups list at this point?
-                    #       When a group is eliminated, what to do?  return 1?
-                    #       Return the product of the function called on each of
-                    #       the remaining group(s) - realising the middle could
-                    #       have been cut out?
-                    for j in range(matches[0].start() - 1, matches[0].end() + 1):
-                        if j in dictionary:
-                            del dictionary[j]
-                else:
-                    for k in range(matches[0].start(), matches[0].end()):
-                        dictionary[k] = [long_group]
-                    # todo: see if there are just the right number of adjacent
-                    #       spots in the dictionary to be able to confidently fill?
-
-    dictionary = day_12_traverse_springs(springs, groups, dictionary)
-    print(f"{dictionary=}")
-    return 1
 
 
 def day_12_get_contiguous_range(dict_keys: [], current_key: int) -> (int,):
@@ -711,17 +622,15 @@ def day_12_get_contiguous_range(dict_keys: [], current_key: int) -> (int,):
 
 
 def day_12_count_possible_arrangements(springs: str, groups: [int]) -> int:
-    if springs.count("#") == sum(groups):
-        return 1
-
     def is_valid(start: int, group_id: int) -> bool:
+        excluded_springs = springs[:start] + springs[start + groups[group_id]:]
+        if excluded_springs.count("#") + groups[group_id] > sum(groups):
+            return False
         return "." not in springs[start:start + groups[group_id]] and\
                "#" not in "".join(springs[i] if i in range(len(springs)) else ""
                                   for i in (start - 1, start + groups[group_id]))
 
-    start_params = day_12_refine_start_parameters(
-        day_12_group_limits_by_social_distancing(springs, groups),
-        springs, groups)
+    start_params = day_12_group_limits_by_social_distancing(springs, groups)
     if len(groups) == 1:
         min_start, max_start = start_params[0]
         return sum([
@@ -736,51 +645,9 @@ def day_12_count_possible_arrangements(springs: str, groups: [int]) -> int:
                 possible_arrangements += day_12_count_possible_arrangements(
                     springs[st + groups[0] + 1:], groups[1:]
                 )
+            if springs[st] == "#":  # group cannot start any later than first known hash
+                break
         return possible_arrangements
-
-
-# def day_12_locate_unmistakable_groups(section: str, groups: [int], dict_so_far: {}) -> {}:
-def day_12_traverse_springs(springs: str, groups: [int], dict_so_far: {}) -> {}:
-    hg = [g for g in groups]
-    grp_dict = {i: grp for i, grp in enumerate(groups)}
-    gi = [*range(len(groups))]
-    limits = day_12_group_limits_by_social_distancing(springs, groups, return_max_end=True)
-    # print(limits)
-    # todo: use social distancing limits (start_params).  If a hash is found
-    #       that only fits one set of limits, can do something with that info
-    # todo: would it actually be more useful to have min. start and max. end limits?
-    previous_char = "."
-    # for i, ch in enumerate(springs):
-    #     if ch == "#":
-    #         if previous_char == ".":
-    #             for di in range(i, i + hg[0] + 1):
-    #                 dict_so_far[di] = [gi[0]]
-    #                 if i + hg[0] + 1 in dict_so_far:
-    #                     del dict_so_far[i + hg[0] + 1]
-    #     previous_char = ch
-    return dict_so_far
-
-
-def day_12_refine_start_parameters(params: [(int,)],
-                                   section: str, groups: [int]) -> [(int,)]:
-    """Use known hash positions to further tie down possible starting points"""
-    for i in day_12_known_hash_string_starts(section):
-        possible_params = [*filter(
-            lambda p: p[0] <= i < p[1] + groups[params.index(p)], params)]
-        if len(possible_params) == 1:
-            new_param = possible_params[0]
-            i_groups = params.index(new_param)
-            new_param = (i, i)
-            params[i_groups] = new_param
-    for i in day_12_known_hash_string_ends(section):
-        possible_params = [*filter(
-            lambda p: p[0] <= i - groups[params.index(p)] + 1 < p[1] + groups[params.index(p)], params)]
-        if len(possible_params) == 1:
-            new_param = possible_params[0]
-            i_groups = params.index(new_param)
-            new_param = (i - groups[i_groups] + 1, i - groups[i_groups] + 1)
-            params[i_groups] = new_param
-    return params
 
 
 def day_12_group_limits_by_social_distancing(section: str, hash_groups: [int],
@@ -797,193 +664,8 @@ def day_12_group_limits_by_social_distancing(section: str, hash_groups: [int],
     return group_limits
 
 
-def day_12_multi_step_solution(section: str, hash_groups: [int]) -> int:
-    """First, use social distancing to get first and last possible starts"""
-    print(f"Running multi-step solution for {section}, {hash_groups}")
-    start_params = day_12_group_limits_by_social_distancing(section, hash_groups)
-    if all(sp[0] == sp[1] for sp in start_params):
-        print(f"{section} returns with social distancing shortcut")
-        return 1
-    """Can known starts and ends of hash-strings help?"""
-    print(f"{start_params=} --> ", end="")
-    known_starts = day_12_known_hash_string_starts(section)
-    known_ends = day_12_known_hash_string_ends(section)
-    for ks in known_starts:
-        found_params = [*filter(lambda sp: sp[0] <= ks <= sp[1], start_params)]
-        if len(found_params) == 1:
-            sp_ind = start_params.index(found_params[0])
-            start_params = day_12_fix_start(start_params, sp_ind, ks, hash_groups)
-        elif all(ch == "." for ch in section[:ks]):
-            start_params = day_12_fix_start(start_params, 0, ks, hash_groups)
-    for ke in known_ends:
-        found_params = [*filter(lambda sp_hg:
-                                sp_hg[0][0] <= ke - sp_hg[1] + 1 <= sp_hg[0][1],
-                                zip(start_params, hash_groups))]
-        if len(found_params) == 1:
-            sp_ind = start_params.index(found_params[0][0])
-            group_length = hash_groups[sp_ind]
-            start_params = day_12_fix_start(start_params, sp_ind, ke - group_length + 1,
-                                            hash_groups)
-        elif all(ch == "." for ch in section[ke + 1:]):
-            start_params = day_12_fix_start(start_params, len(hash_groups) - 1,
-                                            ke - hash_groups[-1] + 1, hash_groups)
-    if all(sp[0] == sp[1] for sp in start_params):
-        print(f"{start_params}")
-        print("\t. . . completes using known starts/ends")
-        return 1
-    """Is whole of first or last group present at a location where it couldn't be any other?"""
-    fmt, lmt = ("#{" + f"{gs}" + "}" for gs in (hash_groups[0], hash_groups[-1]))
-    first_match = re.search(fmt, section)
-    if first_match and first_match.start() < hash_groups[0] + 1:
-        start_params = day_12_fix_start(start_params, 0, first_match.start(), hash_groups)
-    last_match = re.search(lmt, section[::-1])
-    if last_match:
-        lm_start = len(section) - last_match.start() - hash_groups[-1]
-        if lm_start > len(section) - 2 - hash_groups[-1] or \
-                all(ch == "." for ch in section[lm_start + hash_groups[-1]:]):
-            start_params = day_12_fix_start(start_params, len(start_params) - 1,
-                                            lm_start, hash_groups)
-    print(f"{start_params} --> ", end="")
-    if all(sp[0] == sp[1] for sp in start_params):
-        print("\t. . . completes by finding complete group(s) and/or fixing starts")
-        return 1
-    """Try to further narrow down positions using known values:"""
-    for spi, mm in enumerate(start_params):
-        s, e = mm
-        if s == e:
-            continue
-        new_s, new_e = s, e
-        if s > 0 and section[s - 1] == "#":
-            new_s = s + 1
-        for i in range(s, e + hash_groups[spi]):
-            if section[i] == ".":
-                new_s = i + 1
-            if section[i] == "#":
-                new_s = i
-                break
-            if section[i] == "?" and \
-                    all(ch in "#?" for ch in section[i:i + hash_groups[spi]]):
-                break
-        if e + hash_groups[spi] < len(section) and section[e + hash_groups[spi]] == "#":
-            new_e = e - 1
-        for i in range(e + hash_groups[spi] - 1, s - 1, -1):
-            if section[i] == ".":
-                new_e = i - hash_groups[spi]
-            if section[i] == "#":
-                new_e = i - hash_groups[spi] + 1
-                break
-            if section[i] == "?" and \
-                    all(ch in "#?" for ch in section[i - hash_groups[spi] + 1:i + 1]):
-                break
-        if new_s > s or new_e < e:
-            start_params[spi] = (new_s, new_e)
-            if new_s == new_e:
-                day_12_fix_start(start_params, spi, new_s, hash_groups)
-    print(f"{start_params}")
-    if all(sp[0] == sp[1] for sp in start_params):
-        print("\t. . . completes by additional narrowing down based on known characters")
-        return 1
-    """ Search for contiguous areas of unknowns or hashes.
-        Each group must be wholly contained within one of these.
-        But there can be one of these that doesn't contain any group.
-        Look for groups that can only be within one particular run"""
-    return_value = 1
-    remaining_unknowns = [ind for ind, spread in enumerate(start_params)
-                          if spread[1] > spread[0]]
-    assert remaining_unknowns
-    q_or_hash_runs = [(m.start(), m.end() - 1) for m in
-                      re.finditer(r"[?#]+", section)]
-    for qh_first, qh_last in q_or_hash_runs:
-        contained_unknowns = [*filter(
-            lambda ru: start_params[ru][0] + hash_groups[ru] <= qh_last + 1 and
-                       start_params[ru][1] >= qh_first,
-            remaining_unknowns)]
-        if len(contained_unknowns) == 1:
-            print(f"\tsolving {hash_groups} using a single contained unknown")
-            u_index = contained_unknowns[0]
-            space = min(start_params[u_index][1] + hash_groups[u_index], qh_last + 1) - \
-                    max(qh_first, start_params[u_index][0])
-            return_value *= day_12_combinations_per_unknown_section(space, [hash_groups[u_index]])
-            remaining_unknowns.remove(u_index)
-        elif contained_unknowns:
-            first_u = contained_unknowns[0]
-            start_space = max(qh_first, start_params[first_u][0])
-            end_space = min(qh_last + 1,
-                            start_params[first_u][1] + hash_groups[first_u] + 1)
-            hg_to_process, valid_hg = [], []
-            for i, unkn in enumerate(contained_unknowns):
-                hg_to_process.append(hash_groups[unkn])
-                if start_space + \
-                        sum(hg_to_process) + len(hg_to_process) - 1 <= qh_last:
-                    end_space = min(qh_last + 1,
-                                    start_params[unkn][1] + hash_groups[unkn] + 1)
-                    remaining_unknowns.remove(unkn)
-                    valid_hg.append(hash_groups[unkn])
-                else:
-                    break
-            if valid_hg:
-                print(f"\tAttempting solution with multiple contained unknowns")
-                return_value *= day_12_combinations_per_unknown_section(
-                    end_space - start_space, valid_hg)
-    """What to do if a #/? run is long enough to accommodate multiple groups?
-        Try from both ends?  Some hashes may fix positions . . . """
-    """Finally, use the combinations function to get a result for unknown sections.
-            Some kind of rule involving overlap will determine if multiple groups
-            share the same unknown space"""
-    return return_value
-
-
-def day_12_fix_start(min_max_starts: [(int,)],
-                     mms_index: int, new_value: int,
-                     groups: [int]) -> [(int,)]:
-    """Update start parameters list when we know a start value.  Make sure
-        neighbours in the list are updated to ensure social distancing"""
-    min_max_starts[mms_index] = (new_value, new_value)
-    if mms_index > 0:
-        new_prev_max = new_value - 2 - groups[mms_index - 1] + 1
-        if min_max_starts[mms_index - 1][1] > new_prev_max:
-            ns, _ = min_max_starts[mms_index - 1]
-            if ns == new_prev_max:
-                day_12_fix_start(min_max_starts, mms_index - 1, new_prev_max, groups)
-            else:
-                min_max_starts[mms_index - 1] = (ns, new_prev_max)
-    if mms_index < len(min_max_starts) - 1:
-        new_next_min = new_value + groups[mms_index] + 1
-        if min_max_starts[mms_index + 1][0] < new_next_min:
-            _, ns = min_max_starts[mms_index + 1]
-            if ns == new_next_min:
-                day_12_fix_start(min_max_starts, mms_index + 1, new_next_min, groups)
-            else:
-                min_max_starts[mms_index + 1] = (new_next_min, ns)
-    return min_max_starts
-
-
-def day_12_known_hash_string_ends(section: str) -> [int]:
-    starts_in_reversed = day_12_known_hash_string_starts(section[::-1])
-    return [len(section) - 1 - sr for sr in starts_in_reversed[::-1]]
-
-
-def day_12_known_hash_string_starts(section: str) -> [int]:
-    return [ks.start() + ks.group().startswith(".")
-            for ks in re.finditer(r"\.#|^#", section)]
-
-
 def day_12_min_space(hash_groups: [int], at_end: bool = True) -> int:
     return sum(hash_groups) + len(hash_groups) + (not at_end)
-
-
-def day_12_combinations_per_unknown_section(section_length: int, groups: [int]) -> int:
-    """needs to be just the section_length in which group is free to move.
-        External social distancing needs to be handled outside this function"""
-    print(f"\tday_12_combinations_per_unknown_section: {section_length=}, {groups=}")
-    if len(groups) == 1:
-        group_length = groups[0]
-        return section_length - group_length + 1
-    else:
-        return sum(day_12_combinations_per_unknown_section(
-            section_length - (groups[0] + n + 1), groups[1:]
-        )
-                   for n in range(section_length - sum(groups[1:]) - len(groups[1:])))
 
 
 def day_11_part_two(text: str = "", expansion_factor: int = 1_000_000) -> int:
