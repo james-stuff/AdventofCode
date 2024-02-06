@@ -3,6 +3,7 @@ import re
 import aoc_2023 as a23
 import library as lib
 from itertools import cycle
+import random
 
 
 class TestDay19:
@@ -454,18 +455,51 @@ class TestDay12:
         - work in from each end?
         - can be certain which group it is if it's within its own length + 1 from an end"""
 
-    def test_known_termination_points(self):
-        examples = self.example.split("\n")
-        # a23.day_12_count_possibilities_for_subsection(examples[0][:examples[0].index(" ")], [1])
-        # a23.day_12_count_possibilities_for_subsection("##..", [2])
-        test_section = ".##??##.#..."
-        # new = a23.day_12_break_down_from_end(test_section, [3, 2, 1])
-        a23.day_12_find_known_starts(test_section, [3, 2, 1])
-        for eg in examples:
-            print(eg)
-            print("\t", end="")
-            a23.day_12_find_known_starts(*a23.day_12_get_record_details(eg))
-        # assert len(new) == len(test_section)
+    """January 2024 approach:
+        - use social distancing first to calculate min, max starts
+        - crawl through each possible start zone
+        - could also reverse the string to re-use a method in opposite direction
+            (rather than calculating ends using a different method)
+        """
+    def test_hash_starts_and_ends(self):
+        assert a23.day_12_known_hash_string_starts("") == []
+        assert a23.day_12_known_hash_string_starts("#") == [0]
+        assert a23.day_12_known_hash_string_ends("#") == [0]
+        assert a23.day_12_known_hash_string_starts(".#") == [1]
+        assert a23.day_12_known_hash_string_ends(".#") == [1]
+        complex_string = "#.??#..#??#"
+        assert a23.day_12_known_hash_string_starts(complex_string) == [0, 7]
+        assert a23.day_12_known_hash_string_ends(complex_string) == [0, 4, 10]
+        assert a23.day_12_known_hash_string_starts("." + complex_string) == [1, 8]
+        assert a23.day_12_known_hash_string_ends("." + complex_string) == [1, 5, 11]
+        assert a23.day_12_known_hash_string_starts(complex_string + ".") == [0, 7]
+        assert a23.day_12_known_hash_string_ends(complex_string + ".") == [0, 4, 10]
+        eg_strings = [row[:row.index(" ")] for row in self.example.split("\n")]
+        expected_results = [([4], [6]), ([], [12]), ([], []), ([5, 9], [5, 9]),
+                            ([5, 13], [10, 17]), ([], [])]
+        for sequence, er in zip(eg_strings, expected_results):
+            s, e = er
+            assert a23.day_12_known_hash_string_starts(sequence) == s
+            assert a23.day_12_known_hash_string_ends(sequence) == e
+        all_text = a23.Puzzle23(12).get_text_input()
+        longest = 0
+        for line in all_text.strip("\n").split("\n"):
+            seq, _ = a23.day_12_get_record_details(line)
+            if len(seq) > longest:
+                longest = len(seq)
+        print(f"Longest string in real input has {longest} characters")
+        # for _ in range(1_000):
+        #     test_string = "".join(random.choice(".#?") for i in range(random.randrange(20)))
+            # print(f"{test_string=} --> {a23.day_12_known_hash_string_ends(test_string)}")
+            # assert a23.day_12_known_hash_string_starts(test_string) == \
+            #        a23.day_12_known_hash_string_ends(test_string[::-1])
+        # any rule like this?
+        assert a23.day_12_multi_step_solution(".#.#.", [1, 1]) == 1
+        assert a23.day_12_multi_step_solution(".??#..???#", [2, 3]) == 1
+        a23.day_12_multi_step_solution(eg_strings[2], [1, 3, 1, 6])
+        # below is an interesting case: known starts and ends do not help
+        #       because in neither case is there a unique set of start params
+        assert a23.day_12_multi_step_solution(eg_strings[3], [4, 1, 1]) == 1
 
     def test_grouping(self):
         assert a23.day_12_count_all_possible_arrangements("") == 0
@@ -477,11 +511,122 @@ class TestDay12:
         assert a23.day_12_combinations_per_unknown_section(3, [1, 1]) == 1
         assert a23.day_12_combinations_per_unknown_section(7, [2, 1]) == 10
         assert a23.day_12_combinations_per_unknown_section(2, [1]) == 2
+        assert a23.day_12_combinations_per_unknown_section(16, [1, 12]) == 6
         correct_answers = [1, 4, 1, 1, 4, 10]
-        assert a23.day_12_count_all_possible_arrangements(test_lines[0]) == 1
+        assert a23.day_12_min_space([]) == 0
+        line_by_line_results = {}
         for i, line in enumerate(test_lines):
-            print(f"Testing line: {line}")
-            assert a23.day_12_count_all_possible_arrangements(line) == correct_answers[i]
+            print(f"Testing line: {line} -> ")
+            if "???.###" in line:
+                print("debug")
+            line_by_line_results[line] = \
+                a23.day_12_count_possible_arrangements(
+                    *a23.day_12_get_record_details(line)) == correct_answers[i]
+            print(f"\t{'pass' if line_by_line_results[line] else 'fail'}")
+        pprint.pprint(line_by_line_results)
+        assert all([*line_by_line_results.values()])
+
+    def test_dict_solution(self):
+        dictionary = {0: set(), 1: set(), 2: set(), 3: set(), 5: {0}, 9: {1}}
+        assert a23.day_12_get_contiguous_range(dictionary, 0) == (0, 4)
+        assert all(a23.day_12_get_contiguous_range(dictionary.keys(), n) == (0, 4)
+                   for n in range(4))
+        assert a23.day_12_get_contiguous_range(dictionary.keys(), 5) == (5, 6)
+        a23.day_12_dictionary_based_solution(".??..??...?##.", [1, 1, 3])
+        example_rows = self.example.split("\n")
+        for er in example_rows:
+            a23.day_12_dictionary_based_solution(*a23.day_12_get_record_details(er))
+
+    def test_explore_real_input(self):
+        # todo: fails by not taking into account the fixed position of the first
+        #       hash group.  Could I fix this by adjusting social distancing parameters
+        #       for known hash group positions?
+        assert a23.day_12_count_possible_arrangements("#?.???????#????#???.", [1, 1, 12]) == 6
+        assert a23.day_12_dictionary_based_solution('??#??#?#?#?????#?.#.', [1, 1, 12, 1]) == 2
+        assert a23.day_12_dictionary_based_solution("???#?????????.????.?", [11, 1, 2]) == 6
+        assert a23.day_12_dictionary_based_solution(".##.?#??.#.?#", [2, 1, 1, 1]) == 1 # reddit
+        data = a23.Puzzle23(12).get_text_input()
+        results = {}
+        highest_group_size_duplicated = 0
+        offending_group = 0
+        """find #/? runs and see how they relate to hash-group lengths"""
+        for i, row in enumerate(data.strip("\n").split("\n")):
+            springs, groups = a23.day_12_get_record_details(row)
+            q_or_hash_runs = [(m.start(), m.end() - 1) for m in
+                              re.finditer(r"[?#]+", springs)]
+
+            # print(f"{springs=} -> {len(q_or_hash_runs)} runs, {len(groups)} groups")
+            print(f"Input row = {i + 1}: {sorted(groups, reverse=True)} ")#, end="")
+            max_duplicated = max(0, *(n if (groups.count(n) > 1) else 0 for n in groups))
+            if max_duplicated > highest_group_size_duplicated:
+                highest_group_size_duplicated = max_duplicated
+                offending_group = i + 1
+            if i == 29:
+                assert a23.day_12_dictionary_based_solution(springs, groups) == 1
+            if i == 77:
+                assert a23.day_12_count_possible_arrangements(springs, groups) == 7
+            results[i + 1] = a23.day_12_count_possible_arrangements(springs, groups)
+            assert results[i + 1] == a23.day_12_dictionary_based_solution(springs, groups)
+        print(f"{highest_group_size_duplicated=}, {offending_group=}")
+        pprint.pprint(results)
+        print(f"Most possible arrangements: {max(results.items(), key=lambda it: it[1])}")
+        # print(f"The following rows produce NEGATIVE results:\n"
+        #       f"{[k for k in results.keys() if results[k] < 0]}")
+        # print(f"{a23.day_12_dictionary_based_solution('###.###', [3])=}")
+        # todo: are there any real arrangements where number of hashes is greater than
+        #       number implied by groups, and therefore correct answer is zero? - reddit
+        # todo: interesting that surrounding each springs row with '.' gives slightly
+        #        different result
+
+    def test_brute_force(self):
+        assert a23.day_12_group_limits_by_social_distancing("?", [1]) == [(0, 0)]
+        assert a23.day_12_group_limits_by_social_distancing("??", [1]) == [(0, 1)]
+        assert a23.day_12_group_limits_by_social_distancing("??", [2]) == [(0, 0)]
+        assert a23.day_12_group_limits_by_social_distancing("???", [2]) == [(0, 1)]
+        assert a23.day_12_count_possible_arrangements("#", [1]) == 1
+        assert a23.day_12_count_possible_arrangements("?", [1]) == 1
+        assert a23.day_12_count_possible_arrangements(".", [1]) == 0
+        assert a23.day_12_count_possible_arrangements("??", [1]) == 2
+        assert a23.day_12_count_possible_arrangements("?#?", [1]) == 1
+        assert a23.day_12_count_possible_arrangements("?#?#?", [3]) == 1
+        assert a23.day_12_count_possible_arrangements("????", [1]) == 4
+        assert a23.day_12_count_possible_arrangements("???", [1, 1]) == 1
+        assert a23.day_12_count_possible_arrangements("????", [1, 1]) == 3
+        assert a23.day_12_count_possible_arrangements("?????", [1, 1]) == 6
+        assert a23.day_12_count_possible_arrangements("?????", [1, 2]) == 3
+        assert a23.day_12_count_possible_arrangements("??..???", [1, 2]) == 4
+        assert a23.day_12_count_possible_arrangements("??#?", [1]) == 1
+        assert a23.day_12_count_possible_arrangements("?.??????#?", [1, 3, 1]) == 4
+
+    def test_refining_distancing(self):
+        expected = [
+            [(0, 0), (2, 2), (4, 4)],
+            [(0, 7), (2, 9), (10, 10)],
+            [(0, 1), (2, 3), (6, 7), (8, 9)],
+            [(0, 5), (5, 10), (7, 12)], #[(0, 5), (5, 5), (9, 9)],
+            [(0, 3), (5, 5), (13, 13)],
+            [(0, 4), (4, 8), (7, 11)],
+        ]
+        example_rows = self.example.split("\n")
+        for j, er in enumerate(example_rows):
+            text, grps = a23.day_12_get_record_details(er)
+            print(f"Testing {text=}")
+            if j in (3, 4):
+                assert a23.day_12_refine_start_parameters(
+                    a23.day_12_group_limits_by_social_distancing(text, grps), text, grps) == \
+                       expected[j]
+
+    def test_part_one(self):
+        assert a23.day_12_part_one(self.example) == 21
+        p1_solution = a23.day_12_part_one()
+        assert 9245 > p1_solution > 6828
+        # 8216 is also incorrect
+        # 7949 is also incorrect
+        # 7836 also
+        assert p1_solution not in (8216, 7949, 7836, 7931, 7748)
+        lib.verify_solution(p1_solution)
+        """Think solution will be lower than I've been getting (7748)
+            because I'm not nailing down group(s) that I could - see input row 78"""
 
 
 class TestDay11:
