@@ -1,4 +1,7 @@
+import collections
 import itertools
+import pprint
+
 import library as lib
 from main import Puzzle
 import re
@@ -12,6 +15,53 @@ class Puzzle23(Puzzle):
     def get_text_input(self) -> str:
         with open(f'inputs\\2023\\input{self.day}.txt', 'r') as input_file:
             return input_file.read()
+
+
+def day_19_part_one(input_text: str = "") -> int:
+    workflows, part_details = day_19_load_inputs(input_text)
+    accepted_parts = [*filter(lambda p: day_19_is_accepted(p, workflows),
+                              part_details)]
+    return sum(sum(ap.values()) for ap in accepted_parts)
+
+
+def day_19_is_accepted(part: {}, workflows: str) -> bool:
+    return day_19_process_instruction(part, workflows)
+
+
+def day_19_process_instruction(part: {}, workflows: str, line_id: str = "in") -> bool:
+    raw_instruction = re.search(f"{line_id}" + "{.+}", workflows).group()
+    print(raw_instruction)
+    s, e = (raw_instruction.index(ch) for ch in "{}")
+    raw_tests = raw_instruction[s + 1:e]
+    for test in raw_tests.split(","):
+        result = test
+        print(test)
+        if re.search(r"[xmas][<|>]", test):
+            print(f"\tThis is an inequality test")
+            letter = test[0]
+            inequality = test[1]
+            threshold = int(test[2:test.index(":")])
+            next_step = test[test.index(":") + 1:]
+            print(f"It wants me to do {next_step} if {letter} {inequality} {threshold}")
+
+            result = next_step if eval(f"part['{letter}'] {inequality} {threshold}") else ""
+            print(f"{result=}")
+
+        if result:
+            if result in "AR":
+                return result == "A"
+            return day_19_process_instruction(part, workflows, result)
+    return True
+
+
+def day_19_load_inputs(text: str = "") -> (str, [{}]):
+    if not text:
+        text = Puzzle23(19).get_text_input().strip("\n")
+    instructions, _, raw_part_data = text.partition("\n\n")
+    part_parameters = [{m.group()[0]: int(m.group()[2:])
+                        for m in re.finditer(r"\w=\d+", raw_part)}
+                       for raw_part in raw_part_data.split("\n")]
+    return instructions, part_parameters
 
 
 day_18_distance_moves = {
@@ -163,65 +213,83 @@ def day_18_flood_fill_inside(border: set, inner: set) -> set:
 day_17_city = []
 
 
-def day_17_part_one(text: str = "") -> int:
+def day_17_part_one(text: str = ""):
+    if not text:
+        text = Puzzle23(17).get_text_input().strip("\n")
     day_17_load_city(text)
-    grid_size = len(day_17_city)
-    best = 0
-    diagonal_x, diagonal_y = 0, 0
-    for _ in range(grid_size - 1):
-        diagonal_y += 1
-        best += day_17_city[diagonal_x][diagonal_y]
-        diagonal_x += 1
-        best += day_17_city[diagonal_x][diagonal_y]
-    # print(f"{best=}")
-    assert best == 133
-    states = [(0, 0, "R", 0), (0, 0, "D", 0)]
-    while states:
-        states = day_17_next_turn(states)
-        print(f"{len(states)} states -> ", end="")
-        # states = [*filter(
-        #     lambda st: day_17_best_case_heat_loss(st, grid_size) < best,
-        #     states)]
-        # current_best = min(day_17_best_case_heat_loss(stt, grid_size) for stt in states)
-        # if current_best < best:
-        #     print(f"\nNew best: {current_best}")
-        #     best = current_best
-        print(f"{len(states)}")
-        if len(states) > 1_000_000:
-            break
-    scores = {state[-1] for state in states}
-    print(sorted(scores))
-    return best
+    return day_17_using_dijkstra()
 
 
-def day_17_best_case_heat_loss(state: tuple, grid_size: int) -> int:
-    x, y, _, heat_loss_so_far = state[-4:]
-    min_steps = lib.manhattan_distance(lib.Point(x, y),
-                                       lib.Point(*(grid_size - 1 for _ in range(2))))
-    return heat_loss_so_far + min_steps
+def day_17_part_two(text: str = ""):
+    if not text:
+        text = Puzzle23(17).get_text_input().strip("\n")
+    day_17_load_city(text)
+    return day_17_using_dijkstra(4, 10)
 
 
-def day_17_next_turn(all_states: [()]) -> [()]:
-    directions = "URDL"
-    grid_size = len(day_17_city)
-    next_states = []
-    for state in all_states:
-        x, y, facing, heat_loss_so_far = state[-4:]
-        turns_so_far = state[:-4]
-        x, y = point_moves_2023[facing](lib.Point(x, y))
-        heat_loss_so_far += day_17_city[x][y]
-        for turn in range(3):
-            new_facing = facing
-            if turns_so_far[-3:] != (turn for _ in range(3)):
-                if turn:
-                    if turn == 1:
-                        new_facing = directions[(directions.index(facing) - 1) % 4]
-                    if turn == 2:
-                        new_facing = directions[(directions.index(facing) + 1) % 4]
-                next_location = point_moves_2023[new_facing](lib.Point(x, y))
-                if all(0 <= co_ord < grid_size for co_ord in next_location):
-                    next_states.append((*turns_so_far, turn, x, y, new_facing, heat_loss_so_far))
-    return sorted(next_states, key=lambda ns: ns[-1])
+def day_17_using_dijkstra(min_blocks: int = 1, max_blocks: int = 3) -> int:
+    side = len(day_17_city)
+    day_17_space = {(x, y, d, s)
+                    for x in range(side)
+                    for y in range(side)
+                    for d in "URDL"
+                    for s in range(1, max_blocks + 1)}
+    distances_table = {p: 1_000_000 for p in day_17_space}
+    origin_r, origin_d = ((0, 0, dd, 0) for dd in "RD")
+    day_17_space.add(origin_r)
+    day_17_space.add(origin_d)
+    print(f"Space has {len(day_17_space)} points")
+    distances_table[origin_r] = 0
+    distances_table[origin_d] = 0
+    multiple_end_points = {pt: 1_000_000
+                           for pt in day_17_space
+                           if pt[0] == pt[1] == side - 1
+                           and pt[2] in "DR"
+                           and pt[3] >= min_blocks}
+    # tracks = collections.defaultdict()
+    # tracks[origin] = [origin]
+    altered = {origin_r, origin_d}
+    while day_17_space and max(multiple_end_points.values()) == 1_000_000:
+        next_point = min(altered, key=lambda k: distances_table[k])
+        travelled_so_far = distances_table[next_point]
+        if next_point in multiple_end_points:
+            multiple_end_points[next_point] = travelled_so_far
+        neighbours = day_17_find_neighbours(next_point, min_blocks)
+        for ngh in neighbours:
+            if ngh in day_17_space:
+                x, y, _, _ = ngh
+                neighbour_distance = travelled_so_far + day_17_city[x][y]
+                if neighbour_distance < distances_table[ngh]:
+                    distances_table[ngh] = neighbour_distance
+                    # tracks[ngh] = tracks[next_point] + [ngh]
+                    altered.add(ngh)
+        day_17_space.remove(next_point)
+        altered.remove(next_point)
+        if len(day_17_space) % 10_000 == 0:
+            print(f" . . . {len(day_17_space)} points remaining, {len(altered)=}")
+    pprint.pprint(multiple_end_points)
+    return min(multiple_end_points.values())
+
+
+def day_17_find_neighbours(location: (int,), min_blocks: int = 1) -> [(int,)]:
+    """Generates neighbours in any direction except reverse.
+        Does NOT ensure validity.  This should be done by checking
+        each value is in the space"""
+    new_neighbours = []
+    x, y, drn, dist = location
+    valid_directions = [c for i, c in enumerate("URDL")
+                        if c == drn or
+                        i % 2 != "URDL".index(drn) % 2]
+    for d in valid_directions:
+        new_x, new_y = point_moves_2023[d](lib.Point(x, y))
+        new_dist = 0
+        if d == drn:
+            new_dist = dist + 1
+        elif dist >= min_blocks:
+            new_dist = 1
+        if new_dist:
+            new_neighbours.append((new_x, new_y, d, new_dist))
+    return new_neighbours
 
 
 def day_17_load_city(text: str = ""):
@@ -521,7 +589,32 @@ def day_13_load_grids(text: str = "") -> [str]:
     return [sub_grid.split("\n") for sub_grid in text.split("\n\n")]
 
 
+day_12_memo = {}
+day_12_m_usage_counts = {}
+
+
+def day_12_part_two(text: str = "") -> int:
+    if not text:
+        text = Puzzle23(12).get_text_input()
+    total = 0
+    for no, line in enumerate(text.strip("\n").split("\n")):
+        print(f"===== Line {no + 1} =====")
+        total += day_12_p2_process(line)
+    # return sum(day_12_p2_process(line) for line in text.strip("\n").split("\n"))
+    return total
+
+
+def day_12_p2_process(damaged_record: str) -> int:
+    p1_springs, p1_groups = day_12_get_record_details(damaged_record)
+    return day_12_dictionary_based_solution(
+        "?".join([p1_springs] * 5),
+        [g for _ in range(5) for g in p1_groups]
+    )
+
+
 def day_12_part_one(text: str = "") -> int:
+    global day_12_m_usage_counts
+    day_12_m_usage_counts = {}
     if not text:
         text = Puzzle23(12).get_text_input()
     return sum(day_12_count_all_possible_arrangements(record)
@@ -596,7 +689,7 @@ def day_12_dictionary_based_solution(springs: str, groups: [int]) -> int:
             return break_problem(remove_group_index,
                                  (max(k - groups[remove_group_index], 0), k + 2))
     """Use first and last hashes if there is no doubt which group they belong to"""
-    print(f"Before: {dictionary=}")
+    # print(f"Before: {dictionary=}")
     for gi in range(len(groups)):
         definite_finds = {kk: vv for kk, vv in dictionary.items()
                           if vv == {gi}}
@@ -622,6 +715,11 @@ def day_12_get_contiguous_range(dict_keys: [], current_key: int) -> (int,):
 
 
 def day_12_count_possible_arrangements(springs: str, groups: [int]) -> int:
+    springs = springs.strip(".")
+    if (springs, ",".join(f"{g}" for g in groups)) in day_12_memo:
+        # day_12_m_usage_counts[(springs, ",".join(f"{g}" for g in groups))] += 1
+        return day_12_memo[(springs, ",".join(f"{g}" for g in groups))]
+
     def is_valid(start: int, group_id: int) -> bool:
         excluded_springs = springs[:start] + springs[start + groups[group_id]:]
         if excluded_springs.count("#") + groups[group_id] > sum(groups):
@@ -633,10 +731,14 @@ def day_12_count_possible_arrangements(springs: str, groups: [int]) -> int:
     start_params = day_12_group_limits_by_social_distancing(springs, groups)
     if len(groups) == 1:
         min_start, max_start = start_params[0]
-        return sum([
+        arrangements = sum([
             is_valid(s, 0)
             for s in range(min_start, max_start + 1)
         ])
+        # day_12_m_usage_counts[(springs, ",".join(f"{g}" for g in groups))] = 1
+        # if len(springs) < 51:
+        day_12_memo[(springs, ",".join(f"{g}" for g in groups))] = arrangements
+        return arrangements
     else:
         possible_arrangements = 0
         min_start_1, max_start_1 = start_params[0]
@@ -647,6 +749,8 @@ def day_12_count_possible_arrangements(springs: str, groups: [int]) -> int:
                 )
             if springs[st] == "#":  # group cannot start any later than first known hash
                 break
+        if len(springs) < 51:
+            day_12_memo[(springs, ",".join(f"{g}" for g in groups))] = possible_arrangements
         return possible_arrangements
 
 

@@ -25,6 +25,35 @@ hdj{m>838:A,pv}
 {x=2461,m=1339,a=466,s=291}
 {x=2127,m=1623,a=2188,s=1013}"""
 
+    def test_setup(self):
+        eg_load = a23.day_19_load_inputs(self.example)
+        pprint.pprint(eg_load)
+        eg_instr, eg_dicts = eg_load
+        assert len(eg_instr.split("\n")) == 11
+        assert eg_dicts[0]["x"] == 787
+        assert eg_dicts[1]["a"] == 2067
+        assert eg_dicts[3]["s"] == 291
+        main_instr, main_dicts = a23.day_19_load_inputs()
+        assert len(main_instr.split("\n")) == 522
+        assert all(main_instr.split("\n"))
+        assert len(main_dicts) == 200
+        assert main_dicts[0]["m"] == 2
+        assert main_dicts[-1]["a"] == 1006
+        # assert a23.day_19_part_one(self.example) == sum(sum(d.values()) for d in eg_dicts)
+        # assert a23.day_19_part_one() == sum(sum(d.values()) for d in main_dicts)
+
+    def test_following_instructions(self):
+        inst, parts = a23.day_19_load_inputs(self.example)
+        a23.day_19_process_instruction(parts[0], inst)
+        # a23.day_19_process_instruction({}, inst, "qqz")
+
+    def test_part_one(self):
+        assert a23.day_19_part_one(self.example) == 19114
+        p1_solution = a23.day_19_part_one()
+        assert p1_solution < 325520
+        lib.verify_solution(p1_solution)
+
+
 
 class TestDay18:
     example = """R 6 (#70c710)
@@ -169,15 +198,27 @@ class TestDay17:
         assert dims[0] == dims[1]
         print(f"City is {dims[0]} x {dims[1]} square")
 
-    def test_concept(self):
-        """State: *(turns so far), x, y, facing (U, D, L, R), heat loss so far"""
+    def test_neighbour_finding(self):
         a23.day_17_load_city(self.example)
-        states = [(0, 0, "R", 0), (0, 0, "D", 0)]
-        for _ in range(2):
-            states = a23.day_17_next_turn(states)
-        pprint.pprint(states)
-        print(f"\nThere are {len(states)} states:")
-        a23.day_17_part_one(self.example)
+        assert len(a23.day_17_find_neighbours((5, 5, "L", 1))) == 3
+        assert len(a23.day_17_find_neighbours((5, 5, "L", 3))) == 3
+        assert a23.day_17_find_neighbours((6, 0, "D", 2)) == [
+            (6, 1, "R", 1), (7, 0, "D", 3), (6, -1, 'L', 1),
+        ]
+
+    def test_dijkstra_concept(self):
+        a23.day_17_load_city(self.example)
+        answer = a23.day_17_using_dijkstra()
+        assert answer == 102
+
+    def test_part_one(self):
+        lib.verify_solution(a23.day_17_part_one(), 1155)
+        """Takes over one minute"""
+
+    def test_part_two(self):
+        assert a23.day_17_part_two(self.example) == 94
+        lib.verify_solution(a23.day_17_part_two(), correct=1283, part_two=True)
+        """Takes close to 20 minutes"""
 
 
 class TestDay16:
@@ -530,6 +571,11 @@ class TestDay12:
         # 7836 also . . . all based on previous attempts
         assert p1_solution not in (8216, 7949, 7836, 7931, 7748, 7569, 7317, 7321)
         lib.verify_solution(p1_solution, 7307)
+
+    def test_part_two(self):
+        assert a23.day_12_part_two(self.example) == 525152
+        lib.verify_solution(a23.day_12_part_two(), part_two=True)
+        """works, but takes 21 minutes"""
 
 
 class TestDay11:
