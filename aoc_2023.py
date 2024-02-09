@@ -1,6 +1,7 @@
 import collections
 import itertools
 import pprint
+import heapq
 
 import library as lib
 from main import Puzzle
@@ -19,39 +20,49 @@ class Puzzle23(Puzzle):
 
 def day_19_part_one(input_text: str = "") -> int:
     workflows, part_details = day_19_load_inputs(input_text)
-    accepted_parts = [*filter(lambda p: day_19_is_accepted(p, workflows),
-                              part_details)]
-    return sum(sum(ap.values()) for ap in accepted_parts)
+    return sum(sum(p.values()) for p in part_details if day_19_is_accepted(p, workflows))
 
 
 def day_19_is_accepted(part: {}, workflows: str) -> bool:
+    print(f"Part: {part}")
+    assert all(letter in part for letter in "xmas")
     return day_19_process_instruction(part, workflows)
 
 
 def day_19_process_instruction(part: {}, workflows: str, line_id: str = "in") -> bool:
-    raw_instruction = re.search(f"{line_id}" + "{.+}", workflows).group()
-    print(raw_instruction)
+    raw_instruction = re.search(f"\n{line_id}" + "{.+}", workflows).group()
+    # print(raw_instruction)
+    print(line_id, end=" -> ")
     s, e = (raw_instruction.index(ch) for ch in "{}")
     raw_tests = raw_instruction[s + 1:e]
     for test in raw_tests.split(","):
         result = test
-        print(test)
+        # print(test)
         if re.search(r"[xmas][<|>]", test):
-            print(f"\tThis is an inequality test")
+            # print(f"\tThis is an inequality test")
             letter = test[0]
+            assert letter in "xmas"
             inequality = test[1]
+            assert inequality in "<>"
             threshold = int(test[2:test.index(":")])
+            assert 0 < threshold < 10_000
             next_step = test[test.index(":") + 1:]
-            print(f"It wants me to do {next_step} if {letter} {inequality} {threshold}")
-
+            if next_step.islower():
+                assert 1 < len(next_step) < 4
+                assert re.search(next_step, workflows)
+            else:
+                assert next_step in "AR"
+            # print(f"It wants me to do {next_step} if {letter} {inequality} {threshold}")
             result = next_step if eval(f"part['{letter}'] {inequality} {threshold}") else ""
-            print(f"{result=}")
-
+            # print(f"{result=}")
+        # else:
+        #     input(f"Test pattern not found in {test}, on line {raw_instruction}.  Continue?")
         if result:
             if result in "AR":
+                print(result)
                 return result == "A"
             return day_19_process_instruction(part, workflows, result)
-    return True
+    assert False
 
 
 def day_19_load_inputs(text: str = "") -> (str, [{}]):
@@ -61,7 +72,7 @@ def day_19_load_inputs(text: str = "") -> (str, [{}]):
     part_parameters = [{m.group()[0]: int(m.group()[2:])
                         for m in re.finditer(r"\w=\d+", raw_part)}
                        for raw_part in raw_part_data.split("\n")]
-    return instructions, part_parameters
+    return "\n" + instructions, part_parameters     # add "\n" to ensure line_id search always works
 
 
 day_18_distance_moves = {
@@ -235,22 +246,19 @@ def day_17_using_dijkstra(min_blocks: int = 1, max_blocks: int = 3) -> int:
                     for d in "URDL"
                     for s in range(1, max_blocks + 1)}
     distances_table = {p: 1_000_000 for p in day_17_space}
-    origin_r, origin_d = ((0, 0, dd, 0) for dd in "RD")
-    day_17_space.add(origin_r)
-    day_17_space.add(origin_d)
+    altered = []
+    for origin in ((0, 0, dd, 0) for dd in "RD"):
+        day_17_space.add(origin)
+        distances_table[origin] = 0
+        heapq.heappush(altered, (0, origin))
     print(f"Space has {len(day_17_space)} points")
-    distances_table[origin_r] = 0
-    distances_table[origin_d] = 0
     multiple_end_points = {pt: 1_000_000
                            for pt in day_17_space
                            if pt[0] == pt[1] == side - 1
                            and pt[2] in "DR"
                            and pt[3] >= min_blocks}
-    # tracks = collections.defaultdict()
-    # tracks[origin] = [origin]
-    altered = {origin_r, origin_d}
     while day_17_space and max(multiple_end_points.values()) == 1_000_000:
-        next_point = min(altered, key=lambda k: distances_table[k])
+        next_point = heapq.heappop(altered)[1]
         travelled_so_far = distances_table[next_point]
         if next_point in multiple_end_points:
             multiple_end_points[next_point] = travelled_so_far
@@ -261,10 +269,8 @@ def day_17_using_dijkstra(min_blocks: int = 1, max_blocks: int = 3) -> int:
                 neighbour_distance = travelled_so_far + day_17_city[x][y]
                 if neighbour_distance < distances_table[ngh]:
                     distances_table[ngh] = neighbour_distance
-                    # tracks[ngh] = tracks[next_point] + [ngh]
-                    altered.add(ngh)
+                    heapq.heappush(altered, (neighbour_distance, ngh))
         day_17_space.remove(next_point)
-        altered.remove(next_point)
         if len(day_17_space) % 10_000 == 0:
             print(f" . . . {len(day_17_space)} points remaining, {len(altered)=}")
     pprint.pprint(multiple_end_points)

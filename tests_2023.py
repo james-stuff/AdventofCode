@@ -29,13 +29,13 @@ hdj{m>838:A,pv}
         eg_load = a23.day_19_load_inputs(self.example)
         pprint.pprint(eg_load)
         eg_instr, eg_dicts = eg_load
-        assert len(eg_instr.split("\n")) == 11
+        assert len(eg_instr.split("\n")) == 12
         assert eg_dicts[0]["x"] == 787
         assert eg_dicts[1]["a"] == 2067
         assert eg_dicts[3]["s"] == 291
         main_instr, main_dicts = a23.day_19_load_inputs()
-        assert len(main_instr.split("\n")) == 522
-        assert all(main_instr.split("\n"))
+        assert len(main_instr.split("\n")) == 523
+        # assert all(main_instr.split("\n"))
         assert len(main_dicts) == 200
         assert main_dicts[0]["m"] == 2
         assert main_dicts[-1]["a"] == 1006
@@ -53,6 +53,29 @@ hdj{m>838:A,pv}
         assert p1_solution < 325520
         lib.verify_solution(p1_solution)
 
+    def test_explore_real_input(self):
+        # inst, parts = a23.day_19_load_inputs()
+        text = a23.Puzzle23(19).get_text_input()
+        row_indices = {m.start() for m in re.finditer("}\n", text)}
+
+        def find_row(string_index: int) -> int:
+            earlier_indices = {*filter(lambda ri: ri < string_index, row_indices)}
+            if earlier_indices:
+                return len(earlier_indices) + 1
+            return 1
+
+        assert find_row(0) == 1
+        assert find_row(12) == 1
+        assert find_row(16) == 2
+        assert find_row(re.search(r"tfs{", text).start()) == 203
+
+        for search_term in [r"\D0\D", "-"]:
+            for match in re.finditer(search_term, text):
+                print(f"{search_term} found on line {find_row(match.start())}")
+        """Findings:
+        There can be more than one test per workflow on the same letter
+        Line 53: xrk{a>122:jf,a<52:A,A} if a <= 122, second 'a' test is irrelevant
+        If a part passes first 'in' test, it definitely passed first 'zd' test"""
 
 
 class TestDay18:
