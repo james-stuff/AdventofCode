@@ -18,6 +18,72 @@ class Puzzle23(Puzzle):
             return input_file.read()
 
 
+def day_19_part_two(text: str = ""):
+    if not text:
+        text = Puzzle23(19).get_text_input()
+
+    def part_two_process(state: tuple, all_workflows: str) -> [tuple]:
+        out_states = []
+        raw_instruction = re.search(f"\n{state[-1]}" + "{.+}", all_workflows).group()
+        s, e = (raw_instruction.index(ch) for ch in "{}")
+        raw_tests = raw_instruction[s + 1:e]
+        for test in raw_tests.split(","):
+            if re.search(r"[xmas][<>]", test):
+                state, new = day_19_p2_state_splitter(state, test)
+                outcome = test[test.index(":") + 1:]
+                if outcome.islower():
+                    new = tuple((*new[:-1], outcome))
+                    out_states.append(new)
+                elif outcome == "A":
+                    accepted.add(new)
+                elif outcome == "R":
+                    rejected.add(new)
+            elif test.islower() and 1 < len(test) < 4:
+                out_states.append(tuple((*state[:-1], test)))
+            elif test == "A":
+                accepted.add(state)
+            elif test == "R":
+                rejected.add(state)
+        return out_states
+    workflows, _ = day_19_load_inputs(text)
+    initial = tuple((*(1, 4_001) * 4, "in"))
+    queue = [initial]
+    accepted = set()
+    rejected = set()
+    while queue:
+        next_state = queue.pop()
+        print(f"Queue size: {len(queue)}, accepted: {len(accepted)}")
+        queue += part_two_process(next_state, workflows)
+    pprint.pprint(accepted)
+    return day_19_number_of_combinations(accepted)
+
+
+def day_19_number_of_combinations(states: set) -> int:
+    return sum(
+        math.prod(st[n + 1] - st[n] for n in range(0, 8, 2))
+        for st in states)
+
+
+def day_19_p2_state_splitter(state: tuple, test: str) -> tuple:
+    letter = test[0]
+    inequality = test[1]
+    threshold = int(test[2:test.index(":")])
+    index_of_min = "xmas".index(letter) * 2
+    # if not (state[index_of_min] < threshold < state[index_of_min + 1]):
+    #     print(f"Threshold is outside current state range for {state=}, {test=}")
+    #     assert False
+    #     return state
+    state, new = tuple(tuple(threshold + (inequality == ">")
+                             if i == ci
+                             else v
+                             for i, v in enumerate(state))
+                       for ci in (index_of_min, index_of_min + 1)
+                       )
+    if inequality == ">":
+        state, new = new, state
+    return state, new
+
+
 def day_19_part_one(input_text: str = "") -> int:
     workflows, part_details = day_19_load_inputs(input_text)
     return sum(sum(p.values()) for p in part_details if day_19_is_accepted(p, workflows))
@@ -38,14 +104,14 @@ def day_19_process_instruction(part: {}, workflows: str, line_id: str = "in") ->
     for test in raw_tests.split(","):
         result = test
         # print(test)
-        if re.search(r"[xmas][<|>]", test):
+        if re.search(r"[xmas][<>]", test):
             # print(f"\tThis is an inequality test")
             letter = test[0]
             assert letter in "xmas"
             inequality = test[1]
             assert inequality in "<>"
             threshold = int(test[2:test.index(":")])
-            assert 0 < threshold < 10_000
+            assert 0 < threshold <= 4_000
             next_step = test[test.index(":") + 1:]
             if next_step.islower():
                 assert 1 < len(next_step) < 4

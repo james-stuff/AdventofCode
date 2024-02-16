@@ -1,9 +1,17 @@
+import math
 import pprint
 import re
 import aoc_2023 as a23
 import library as lib
 from itertools import cycle
-import random
+
+
+class TestDay20:
+    basic_example = """broadcaster -> a, b, c
+%a -> b
+%b -> c
+%c -> inv
+&inv -> a"""
 
 
 class TestDay19:
@@ -51,7 +59,7 @@ hdj{m>838:A,pv}
         assert a23.day_19_part_one(self.example) == 19114
         p1_solution = a23.day_19_part_one()
         assert p1_solution < 325520
-        lib.verify_solution(p1_solution)
+        lib.verify_solution(p1_solution, 280909)
 
     def test_explore_real_input(self):
         # inst, parts = a23.day_19_load_inputs()
@@ -76,6 +84,77 @@ hdj{m>838:A,pv}
         There can be more than one test per workflow on the same letter
         Line 53: xrk{a>122:jf,a<52:A,A} if a <= 122, second 'a' test is irrelevant
         If a part passes first 'in' test, it definitely passed first 'zd' test"""
+
+    def test_concept_for_part_two(self):
+        """State: (min_x, max_x, min_m, max_m, . . . max_s, workflow_about_to_be_entered)
+            9-tuple
+            Initial: (1, 4_000, 1, 4_000, 1, 4_000, 1, 4_000, "in")
+            Form queue of states to explore.  For each one, create new states
+            for each step in the process that doesn't lead to rejection.
+            Put accepted states into a final set to evaluate"""
+
+        def part_two_process(state: tuple, workflows: str) -> [tuple]:
+            out_states = []
+            raw_instruction = re.search(f"\n{state[-1]}" + "{.+}", workflows).group()
+            s, e = (raw_instruction.index(ch) for ch in "{}")
+            raw_tests = raw_instruction[s + 1:e]
+            for test in raw_tests.split(","):
+                if re.search(r"[xmas][<>]", test):
+                    state, new = a23.day_19_p2_state_splitter(state, test)
+                    outcome = test[test.index(":") + 1:]
+                    if outcome.islower():
+                        new = tuple((*new[:-1], outcome))
+                        out_states.append(new)
+                    elif outcome == "A":
+                        accepted.add(new)
+                    elif outcome == "R":
+                        rejected.add(new)
+                elif test.islower() and 1 < len(test) < 4:
+                    out_states.append(tuple((*state[:-1], test)))
+                elif test == "A":
+                    accepted.add(state)
+                elif test == "R":
+                    rejected.add(state)
+            return out_states
+
+        workflows, _ = a23.day_19_load_inputs(self.example)
+        initial = tuple((*(1, 4_001) * 4, "in"))
+        assert a23.day_19_p2_state_splitter(initial, "x<1000:abc") == (
+            (1_000, 4_001, 1, 4_001, 1, 4_001, 1, 4_001, "in"),
+            (1, 1_000, 1, 4_001, 1, 4_001, 1, 4_001, "in"),
+        )
+        assert a23.day_19_p2_state_splitter(initial, "m>1000:abc") == (
+            (1, 4_001, 1, 1_001, 1, 4_001, 1, 4_001, "in"),
+            (1, 4_001, 1_001, 4_001, 1, 4_001, 1, 4_001, "in"),
+        )
+        real_state = (1, 4_001, 1, 1_000, 1, 4_001, 1_351, 4_001, "qqz")
+        assert a23.day_19_p2_state_splitter(real_state, "s>2770:qs") == (
+            (1, 4_001, 1, 1_000, 1, 4_001, 1_351, 2_771, "qqz"),
+            (1, 4_001, 1, 1_000, 1, 4_001, 2_771, 4_001, "qqz")
+        )
+        queue = [initial]
+        accepted = set()
+        rejected = set()
+        while queue:
+            next_state = queue.pop()
+            print(f"Queue size: {len(queue)}, accepted: {len(accepted)}")
+            queue += part_two_process(next_state, workflows)
+        pprint.pprint(accepted)
+        answer = sum(
+            math.prod(acc[n + 1] - acc[n] for n in range(0, 8, 2))
+            for acc in accepted
+        )
+        size_of_rejected = sum(
+            math.prod(rej[n + 1] - rej[n] for n in range(0, 8, 2))
+            for rej in rejected
+        )
+        print(answer, f"differs by {167409079868000 - answer}")
+        print(f"Total states considered: {answer + size_of_rejected}")
+        # assert answer + size_of_rejected == 4_000 ** 4
+
+    def test_part_two(self):
+        assert a23.day_19_part_two(self.example) == 167409079868000
+        lib.verify_solution(a23.day_19_part_two(), 116138474394508, part_two=True)
 
 
 class TestDay18:
