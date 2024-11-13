@@ -2,7 +2,6 @@ import collections
 import itertools
 import pprint
 import heapq
-
 import library as lib
 from main import Puzzle
 import re
@@ -18,7 +17,119 @@ class Puzzle23(Puzzle):
             return input_file.read()
 
 
-def day_19_part_two(text: str = ""):
+def day_21_load_garden(layout: str) -> {}:
+    return {
+        lib.Point(r, c): symbol == "S"
+        for r, row in enumerate(layout.split("\n"))
+        for c, symbol in enumerate(row)
+        if symbol != "#"
+    }
+
+
+def day_21_count_reachable_plots(garden: {}, steps: int) -> int:
+    garden = day_21_brute_force(garden, steps)
+    return len([*filter(lambda v: v, garden.values())])
+
+
+def day_21_brute_force(garden: {}, steps: int) -> {}:
+    for _ in range(steps):
+        visited = [*filter(lambda t: t[1] == True, garden.items())]
+        for k, _ in visited:
+            for pt in [v(k) for v in point_moves_2023.values()]:
+                if pt in garden:
+                    garden[pt] = True
+    return garden
+
+
+def day_20_part_two() -> int:
+    pb_args = day_20_set_up()
+    _, conjunctions, _ = pb_args
+    button_presses = 0
+    while button_presses < 100000:
+        button_presses += 1
+        day_20_push_the_button(*pb_args, button_presses)
+        c_values = [sum(conjunctions[cj].values()) for cj in conjunctions]#["pm", "mk", "pk", "hf"]]
+        if button_presses > 50_000:
+            print(c_values)
+        if not any(c_values):
+            pprint.pprint(conjunctions)
+            print(f"Condition met on cycle {button_presses}")
+            # doesn't get there in under 2 minutes
+            break
+    return button_presses
+
+
+def day_20_part_one(text: str = "") -> int:
+    pb_args = day_20_set_up(text)
+    lows, highs = 0, 0
+    for _ in range(1_000):
+        l, h = day_20_push_the_button(*pb_args, _)
+        lows += l
+        highs += h
+    return lows * highs
+
+
+def day_20_set_up(text: str = "") -> ({}):
+    if not text:
+        text = Puzzle23(20).get_text_input()
+    modules, connections = day_20_load(text)
+    flip_flops = {m: False for m, t in modules.items() if t == "%"}
+    conjunctions = {mc: {k: False for k, v in connections.items()
+                         if mc in v}
+                    for mc, mt in modules.items() if mt == "&"}
+    # print(flip_flops)
+    assert len(flip_flops) == text.count("%")
+    print(f"There are {len(conjunctions)} conjunctions")
+    print(conjunctions)
+    assert len(conjunctions) == text.count("&")
+    return flip_flops, conjunctions, connections
+
+
+def day_20_push_the_button(ff: {}, conj: {}, conn: {}, cycle_id: int) -> (int,):
+    counts = [0, 0]
+    pulse_queue = collections.deque([("button", "broadcaster", False)])
+    max_queue_size = 1
+    while pulse_queue:
+        origin, destination, pulse = pulse_queue.popleft()
+        counts[pulse] += 1
+        if destination in ff and (not pulse):
+            ff[destination] = not ff[destination]
+            for next_destination in conn[destination]:
+                pulse_queue.append((destination, next_destination, ff[destination]))
+        elif destination in conj:
+            conj[destination][origin] = pulse
+            send_pulse = not all(conj[destination].values())
+            for next_destination in conn[destination]:
+                pulse_queue.append((destination, next_destination, send_pulse))
+        elif destination == "broadcaster":
+            for next_destination in conn[destination]:
+                pulse_queue.append((destination,next_destination, pulse))
+        max_queue_size = max(max_queue_size, len(pulse_queue))
+    # print(f"{max_queue_size=}")
+    # if max_queue_size not in (24, 28, 29):
+    #     print(f"*** {cycle_id=}, {max_queue_size=}")
+        # print(f" Conjunction states: {', '.join(c + ':' + str(len([k for k, v in conj[c].items() if v])) + '/' + str(len(c)) for c in conj)}")
+    # if cycle_id % 1_000 == 0:
+    #     c_states = {c: (len([*filter(lambda v: v, conj[c].values())]), len(conj[c])) for c in conj}
+    #     print(f" {c_states}")
+    return tuple(counts)
+
+
+def day_20_load(text: str) -> (dict,):
+    module_types, connections = ({} for _ in range(2))
+    for match in re.finditer("[&%]*.+ -> .+", text):
+        row = match.group()
+        module_id = re.search(r"\w+", row).group()
+        recipients = tuple(re.search(r"\s\w.*", row).group()[1:].split(", "))
+        connections[module_id] = recipients
+        if row[0] in "%&":
+            module_types[module_id] = row[0]
+    assert len(connections) == len(text.strip("\n").split("\n"))# + 1
+    assert len(module_types) == len(text.strip("\n").split("\n")) - 1
+    return module_types, connections
+
+
+def day_19_part_two(text: str = "") -> int:
     if not text:
         text = Puzzle23(19).get_text_input()
 

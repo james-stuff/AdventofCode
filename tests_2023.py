@@ -6,12 +6,73 @@ import library as lib
 from itertools import cycle
 
 
+class TestDay21:
+    eg_map = """...........
+.....###.#.
+.###.##..#.
+..#.#...#..
+....#.#....
+.##..S####.
+.##..#...#.
+.......##..
+.##.#.####.
+.##..##.##.
+..........."""
+
+    def test_load(self):
+        gdn = a23.day_21_load_garden(self.eg_map)
+        assert len([*filter(lambda v: v, gdn.values())]) == 1
+        assert gdn[(5, 5)] == True
+        assert (9, 1) not in gdn
+        assert all([not gdn[(10, n)] for n in range(11)])
+
+    def test_with_example(self):
+        func = lambda steps: (
+            a23.day_21_count_reachable_plots(
+            a23.day_21_load_garden(self.eg_map), steps
+            )
+        )
+        assert func(0) == 1
+        assert func(1) == 3
+        assert func(2) == 6
+        assert func(3) == 10
+        assert func(6) == 16
+
+
 class TestDay20:
     basic_example = """broadcaster -> a, b, c
 %a -> b
 %b -> c
 %c -> inv
 &inv -> a"""
+    example = """broadcaster -> a
+%a -> inv, con
+&inv -> b
+%b -> con
+&con -> output"""
+
+    def test_setup(self):
+        """False = low pulse, True = high pulse
+            queue = (destination, pulse type)"""
+        assert a23.day_20_part_one(self.basic_example) == 32_000_000
+        assert a23.day_20_part_one(self.example) == 11_687_500
+
+    def test_part_one(self):
+        lib.verify_solution(a23.day_20_part_one(), 680_278_040)
+
+    def test_part_two(self):
+        """Only the conjunction vf transmits to rx.
+            vf is itself the product of four other conjunctions
+            I think all of their respective sources are also conjunctions
+        Max. queue size seems to follow a pattern.  Usually repeats every 4 cycles,
+        but every 32 cycles, something interesting happens (alternates 34, 38),
+        so maybe something is repeating every 64 cycles?
+        This regularity seems to be broken after tens of thousands of cycles
+        Make rx into a flip-flop to detect when it is triggered?
+        For rx to receive a low pulse, vf must receive four high pulses:
+            pm, mk, pk, hf
+        But (up to 1,000 cycles) all its inputs are high (1/1) so it only receives four lows"""
+        a23.day_20_part_two()
 
 
 class TestDay19:
