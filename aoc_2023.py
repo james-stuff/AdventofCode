@@ -27,19 +27,17 @@ def day_21_load_garden(layout: str) -> {}:
 
 
 def day_21_count_reachable_plots(garden: {}, steps: int) -> int:
-    garden = day_21_brute_force(garden, steps)
-    return len([*filter(lambda v: v, garden.values())])
-
-
-def day_21_brute_force(garden: {}, steps: int) -> {}:
+    plots = [[*filter(lambda pl: garden[pl], garden)][0]]
     for _ in range(steps):
-        visited = [*filter(lambda t: t[1] == True, garden.items())]
-        for k, _ in visited:
-            for pt in [v(k) for v in point_moves_2023.values()]:
-                if pt in garden:
-                    garden[pt] = True
-    return garden
-
+        plots = list(
+            {
+                move(plot)
+                for plot in plots
+                for move in point_moves_2023.values()
+                if move(plot) in garden
+            }
+        )
+    return len(plots)
 
 def day_20_part_two() -> int:
     pb_args = day_20_set_up()

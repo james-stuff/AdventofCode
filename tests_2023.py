@@ -22,7 +22,7 @@ class TestDay21:
     def test_load(self):
         gdn = a23.day_21_load_garden(self.eg_map)
         assert len([*filter(lambda v: v, gdn.values())]) == 1
-        assert gdn[(5, 5)] == True
+        assert gdn[(5, 5)] is True
         assert (9, 1) not in gdn
         assert all([not gdn[(10, n)] for n in range(11)])
 
@@ -33,10 +33,17 @@ class TestDay21:
             )
         )
         assert func(0) == 1
-        assert func(1) == 3
-        assert func(2) == 6
-        assert func(3) == 10
+        assert func(1) == 2
+        assert func(2) == 4
+        assert func(3) == 6
         assert func(6) == 16
+
+    def test_part_one(self):
+        garden = a23.day_21_load_garden(a23.Puzzle23(21).get_text_input())
+        lib.verify_solution(
+            a23.day_21_count_reachable_plots(garden, 64),
+            3617
+        )
 
 
 class TestDay20:
