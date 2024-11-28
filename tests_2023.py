@@ -18,6 +18,13 @@ class TestDay21:
 .##.#.####.
 .##..##.##.
 ..........."""
+    part_two_expected = """In exactly 6 steps, he can still reach 16 garden plots.
+In exactly 10 steps, he can reach any of 50 garden plots.
+In exactly 50 steps, he can reach 1594 garden plots.
+In exactly 100 steps, he can reach 6536 garden plots.
+In exactly 500 steps, he can reach 167004 garden plots.
+In exactly 1000 steps, he can reach 668697 garden plots.
+In exactly 5000 steps, he can reach 16733044 garden plots."""
 
     def test_load(self):
         gdn = a23.day_21_load_garden(self.eg_map)
@@ -25,11 +32,17 @@ class TestDay21:
         assert gdn[(5, 5)] is True
         assert (9, 1) not in gdn
         assert all([not gdn[(10, n)] for n in range(11)])
+        print(f"{len(gdn)=}, {len(self.eg_map.split()[0])=}")
 
     def test_with_example(self):
+        # func = lambda steps: (
+        #     a23.day_21_count_reachable_plots(
+        #     a23.day_21_load_garden(self.eg_map), steps
+        #     )
+        # )
         func = lambda steps: (
-            a23.day_21_count_reachable_plots(
-            a23.day_21_load_garden(self.eg_map), steps
+            a23.day_21_run_for_n_steps(
+                a23.day_21_load_garden(self.eg_map), steps
             )
         )
         assert func(0) == 1
@@ -41,9 +54,189 @@ class TestDay21:
     def test_part_one(self):
         garden = a23.day_21_load_garden(a23.Puzzle23(21).get_text_input())
         lib.verify_solution(
-            a23.day_21_count_reachable_plots(garden, 64),
+            # a23.day_21_count_reachable_plots(garden, 64),
+            a23.day_21_run_for_n_steps(garden, 64),
             3617
         )
+
+    def extract_p2_expected(self) -> {}:
+        return {
+            steps: expected
+            for steps, expected in zip(
+                *(
+                    [
+                        int(m.group().split()[0])
+                        for m in
+                        re.finditer(s, self.part_two_expected)
+                    ]
+                    for s in (r"\d+ steps", r"\d+ garden")
+                )
+            )
+        }
+
+    def test_with_infinite_garden(self):
+        eg_garden = a23.day_21_load_garden(self.eg_map)
+        results = a23.day_21_first_n_results(eg_garden)
+        ep = self.extract_p2_expected()
+        for st, exp in ep.items():
+            if st < 100:
+                continue
+            predicted = a23.day_21_count_reachable_plots_in_infinite_garden(
+                eg_garden, st, results
+            )
+            if predicted != exp:
+                print(f"Test fails for {st} steps")
+                assert predicted == exp
+
+    def test_find_relationship(self):
+        """Thought experiment: what if you operate on a rock-free grid?
+            would the answer be (x + 1)-squared?  Conclusion: yes
+            Could it be something like (x + 1)-squared
+            minus half the number of rocks within the reachable radius?  No,
+                not as simple as this because once blocked, a path cannot
+                continue in its original direction"""
+        unimpeded_garden = {
+            lib.Point(x, y): False
+            for x in range(21)
+            for y in range(21)
+        }
+        unimpeded_garden[(10, 10)] = True
+        # a23.day_21_rocks = {(9, 10)}
+        del unimpeded_garden[(10, 11)]
+        del unimpeded_garden[(9, 11)]
+        del unimpeded_garden[(8, 11)]
+        eg_garden = a23.day_21_load_garden(a23.Puzzle23(21).get_text_input())
+        total_steps = 10
+        for s in range(total_steps):
+        # s = 10
+            unimpeded_garden = a23.day_21_make_step_and_print_garden(
+                unimpeded_garden
+            )
+        # print(f"{s=}, {a23.day_21_count_reachable_plots(
+        #     unimpeded_garden, s
+        # )}, {(s + 1) ** 2=}")
+        print(f"{len([*filter(lambda v: v, eg_garden.values())])}, {(total_steps + 1) ** 2=}")
+        possible_destinations = len([*filter(lambda v: v, eg_garden.values())])
+        print(f"{total_steps=}, {possible_destinations=}"
+              f", shortfall from (x + 1)^2 = {(total_steps + 1) ** 2 - possible_destinations}")
+
+        # IDEA: only need to know the furthest out points,
+        #       and anything in between is a grid with an 'O'
+        #       every two steps, except rocks?
+        # NOTE: in example map, none of the N, S, E, W axes are clear
+        #       but in the real thing, they all are completely clear
+        assert [*filter(lambda k: eg_garden[k], eg_garden.keys())][0] == lib.Point(65, 65)
+        assert all(p in eg_garden for p in [lib.Point(65, y) for y in range(130)])
+        assert all(p in eg_garden for p in [lib.Point(x, 65) for x in range(130)])
+
+    def test_run_further(self):
+        gdn = a23.day_21_load_garden(self.eg_map)
+        print([*filter(lambda k: k[0] == 1, gdn.keys())])
+        dup_gdn = a23.day_21_duplicate_garden(gdn, (1, 0))
+        assert len(dup_gdn) == len(gdn)
+        print([*filter(lambda k: k[0] == 12, dup_gdn.keys())])
+        assert (1, 7) not in gdn
+        assert gdn[(1, 8)] is False
+        assert (12, 7) not in dup_gdn
+        assert lib.Point(12, 8) in dup_gdn
+        # print(f"{gdn[lib.Point(12, 8)]=}")
+        assert dup_gdn[(12, 8)] is False
+        r_dup = 46
+        big_garden = {}
+        for m in range(-r_dup, r_dup + 1):
+            for n in range(-r_dup, r_dup + 1):
+                big_garden.update(
+                    a23.day_21_duplicate_garden(gdn, (m, n))
+                )
+        # assert len(big_garden) == 169 * len(gdn)
+        # assert min(big_garden) == (-66, -66)
+        # assert max(big_garden) == (76, 76)
+        assert len([*filter(lambda v: v, big_garden.values())]) == 1
+        exp = self.extract_p2_expected()
+        for k, v in exp.items():
+            # TAKES OVER 6 MINUTES if going to 500 steps
+            #       but at least tests pass
+            if k < 1:
+                print(f"Testing {k} steps:")
+                assert a23.day_21_count_reachable_plots(
+                    big_garden, k) == v
+
+        previous, reachable = 0, 0
+        for n_steps in range(500):
+            big_garden = a23.day_21_make_step(big_garden)
+            previous, reachable = (
+                reachable,
+                len([*filter(lambda v: v, big_garden.values())])
+            )
+            if n_steps % 11 == 1:
+                square_size = (n_steps + 2) ** 2
+                print(f"{n_steps + 1:>3} steps -> "
+                      f"{reachable:>6}, increment={reachable - previous:>6} "
+                      f"(n + 1)-squared={square_size} "
+                      f"missing = {square_size - reachable} "
+                      f"rocks encountered={a23.day_21_rocks_within(big_garden, n_steps + 1)}"
+                      f" furthest = {max(filter(lambda k: big_garden[k], 
+                                                big_garden.keys()))}")
+                if n_steps < 50:
+                    a23.day_21_print_garden(big_garden)
+
+                    # todo: How about: run for the first 100 steps.
+                    #                    find the pattern per step
+                    #                   add on the increasing-by-80 missing plots each 11 steps
+
+    def test_possible_p2_solution(self):
+        base_garden = a23.day_21_load_garden(self.eg_map)
+        results = a23.day_21_first_n_results(base_garden)
+        answer = a23.day_21_count_reachable_plots_in_infinite_garden(
+            base_garden, 100, results
+        )
+        print(f"{answer=}")
+
+        base_string = "\n".join("." * 11 for _ in range(11))
+        base_string = f"{base_string[:65]}S{base_string[66:]}"
+
+        def insert_rock_at(s: str, row: int, col: int) -> str:
+            n = (row * 12) + col
+            return f"{s[:n]}#{s[n + 1:]}"
+
+        # one_1 = insert_rock_at(base_string, 4, 5)
+        # one_2 = insert_rock_at(base_string, 1, 1)
+        # one_3 = insert_rock_at(base_string, 8, 3)
+        def multi_rock_garden(s: str, rock_locs: [(int,)]) -> str:
+            for rl in rock_locs:
+                s = insert_rock_at(s, *rl)
+            print(s)
+            return s
+
+        two_rock_gardens = [
+            multi_rock_garden(base_string, [(9, 8), (9, 9)]),
+            multi_rock_garden(base_string, [(7, 5), (4, 3)]),
+
+            multi_rock_garden(base_string, [(4, 4), (4, 5), (4, 6), (8, 8), (7, 7)]),
+        ]
+        for bs in two_rock_gardens:
+            garden = a23.day_21_load_garden(bs)
+            results = a23.day_21_first_n_results(garden)
+            answer = a23.day_21_count_reachable_plots_in_infinite_garden(
+                garden, 100, results
+            )
+            print(f"{answer=}")
+
+        # print("\n", insert_rock_at(base_string, 6, 7))
+
+    def test_rocks_within(self):
+        gdn = a23.day_21_load_garden(self.eg_map)
+        results = [0, 2, 5, 9, 18]
+        for n, r in zip(range(5), results):
+            assert a23.day_21_rocks_within(gdn, n) == r#((n + 1) ** 2) + (n ** 2)
+
+    def test_part_two(self):
+        puzzle_text = a23.Puzzle23(21).get_text_input()
+        gdn = a23.day_21_load_garden(puzzle_text)
+        g_size = max(gdn)[0] + 1
+        print(f"Garden size: {g_size}, containing {puzzle_text.count('#')} rocks")
+        d = a23.day_21_first_n_results(gdn, g_size * 8)
+        print(f"Result: {a23.day_21_count_reachable_plots_in_infinite_garden(gdn, 26501365, d)}")
 
 
 class TestDay20:

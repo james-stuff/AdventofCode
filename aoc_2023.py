@@ -1,4 +1,5 @@
 import collections
+import copy
 import itertools
 import pprint
 import heapq
@@ -17,6 +18,9 @@ class Puzzle23(Puzzle):
             return input_file.read()
 
 
+day_21_rocks = {}
+
+
 def day_21_load_garden(layout: str) -> {}:
     return {
         lib.Point(r, c): symbol == "S"
@@ -27,17 +31,149 @@ def day_21_load_garden(layout: str) -> {}:
 
 
 def day_21_count_reachable_plots(garden: {}, steps: int) -> int:
-    plots = [[*filter(lambda pl: garden[pl], garden)][0]]
     for _ in range(steps):
-        plots = list(
-            {
-                move(plot)
-                for plot in plots
-                for move in point_moves_2023.values()
-                if move(plot) in garden
-            }
-        )
-    return len(plots)
+        garden = day_21_make_step(garden)
+    return len([*filter(lambda v: v, garden.values())])
+
+
+def day_21_make_step_and_print_garden(garden: {}) -> {}:
+    garden = day_21_make_step(garden)
+    day_21_print_garden(garden)
+
+
+def day_21_print_garden(garden: {}, view_radius: int = 11):
+    # side = max(garden)[0] + 1
+    # side = 21
+
+    def char(c: int, r: int) -> str:
+        pt = lib.Point(c, r)
+        if pt in garden:
+            if garden[pt]:
+                return "O"
+            elif lib.manhattan_distance(pt, origin) <= steps:
+                if lib.manhattan_distance(pt, origin) % 2 != even:
+                    return "@"
+            return "."
+        return "#"
+
+    print("")
+    origin = (5, 5)
+    even = garden[origin]
+    steps = max(lib.manhattan_distance(origin, pt)
+                for pt in filter(lambda k: garden[k], garden))
+    view_range = 5 - view_radius, 5 + view_radius + 1
+    for col in range(*view_range):
+        print(" ".join(char(col, row) for row in range(*view_range)))
+    return garden
+
+
+def day_21_rocks_within(garden: {}, radius: int) -> int:
+    g_size = max(garden)[0] + 1
+    area = [(r, c)
+            for r in range(-g_size, g_size)
+            for c in range(-g_size, g_size)
+            if lib.manhattan_distance((5, 5), (r, c)) <= radius
+            ]
+    return len([*filter(lambda p: p not in garden, area)])
+
+
+def day_21_make_step(garden: {}) -> {}:
+    new_garden = {k: v for k, v in garden.items()}
+    for loc in filter(lambda k: garden[k], garden):
+        new_garden[loc] = False
+        for mv in point_moves_2023.values():
+            adj_loc = mv(loc)
+            if adj_loc in garden:
+                new_garden[adj_loc] = True
+    return new_garden
+
+
+def day_21_run_for_n_steps(garden: {}, ns: int, record: bool = False) -> int:
+    frontline = [[*filter(lambda k: garden[k], garden)][0]]
+    even_visited, odd_visited = (set() for _ in range(2))
+    results = {}
+    for i in range(ns):
+        new_fl = []
+        for point in frontline:
+            for move in point_moves_2023.values():
+                new_loc = move(point)
+                if new_loc in garden:
+                    if ((i % 2 and new_loc not in even_visited) or
+                            ((not i % 2) and new_loc not in odd_visited)):
+                        if new_loc not in new_fl:
+                            new_fl.append(new_loc)
+            if i % 2:
+                odd_visited.add(point)
+            else:
+                even_visited.add(point)
+        frontline = new_fl
+        if record:
+            results[i + 1] = len(frontline) + len(even_visited if i % 2 else odd_visited)
+            if i % 50 == 0:
+                print(f"Running step {i + 1}")
+    if record:
+        return results
+    return len(frontline) + len(odd_visited if ns % 2 else even_visited)
+
+
+def day_21_duplicate_garden(original: {}, offset: (int,)) -> {}:
+    y_offset, x_offset = offset
+    size = max(original)[0] + 1
+    return {
+        lib.Point(k[0] + (y_offset * size), k[1] + (x_offset * size)):
+            v if offset == (0, 0) else False
+        for k, v in original.items()
+    }
+
+
+def day_21_count_reachable_plots_in_infinite_garden(
+        base_garden: {}, target_steps: int, results: {}) -> int:
+    bg_size = max(base_garden)[0] + 1
+
+    def shortfall(steps_in: int) -> int:
+        return ((steps_in + 1) ** 2) - results[steps_in]
+
+    def shortfall_difference(steps_in: int, back_steps: int) -> int:
+        return shortfall(steps_in) - shortfall(steps_in - back_steps)
+
+    shortfall_diffs = [
+        shortfall_difference(k, bg_size)
+        for k in range(bg_size * 5, max(results.keys()) + 1, bg_size)
+    ]
+    increases = [
+        sf - shortfall_diffs[i]
+        for i, sf in enumerate(shortfall_diffs[1:])
+    ]
+    increment = increases[0]
+    assert all(d == increment for d in increases)
+    print(f"The shortfall from (n + 1)-squared grows by {increment} every {bg_size} steps")
+    start = max(filter(lambda kk: kk % bg_size == target_steps % bg_size, results.keys()))
+    print(f"{start=}")
+    starting_shortfall = ((start + 1) ** 2) - results[start]
+    big_steps = (target_steps - start) // bg_size
+    final_shortfall_diff = (shortfall_difference(start, bg_size) * big_steps) + (increment * (big_steps + 1) * big_steps // 2)
+    return ((target_steps + 1) ** 2) - starting_shortfall - final_shortfall_diff
+
+
+def day_21_first_n_results(base_garden: {}, n: int = 100) -> {}:
+    r_dup = (n * 2) // max(base_garden)[0]
+    # print(f"\n{r_dup=}")
+    big_garden = {}
+    for y in range(-r_dup, r_dup + 1):
+        for x in range(-r_dup, r_dup + 1):
+            big_garden.update(
+                day_21_duplicate_garden(base_garden, (y, x))
+            )
+    print(f"{len(big_garden) = }")
+    # results = {}
+    # for step in range(n):
+    #     big_garden = day_21_make_step(big_garden)
+    #     results[step + 1] = sum(big_garden.values())
+    #     if step % 5 == 0:
+    #         print(f"Running simulation: {step}th step")
+    # return results
+    return day_21_run_for_n_steps(big_garden, n, record=True)
+
 
 def day_20_part_two() -> int:
     pb_args = day_20_set_up()
