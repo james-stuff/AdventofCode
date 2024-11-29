@@ -6,6 +6,84 @@ import library as lib
 from itertools import cycle
 
 
+class TestDay22:
+    eg_input = """1,0,1~1,2,1
+0,0,2~2,0,2
+0,2,3~2,2,3
+0,0,4~0,2,4
+2,0,5~2,2,5
+0,1,6~2,1,6
+1,1,8~1,1,9"""
+
+    """bricks = {starting co-ordinate: dimensions}?
+        Then collapse the stack
+        Need a dict of {brick: {bricks it supports}}
+        Starting co-ordinate will always be unique id"""
+
+    def test_load_and_explore(self):
+        real_text = a23.Puzzle23(22).get_text_input()
+
+        def load(t: str) -> {}:
+            t = t.strip("\n")
+            def co_ord_str_to_tuple(csv: str) -> (int,):
+                return tuple(int(v) for v in csv.split(","))
+
+            bricks = {}
+            for row in t.split("\n"):
+                end_1, end_2 = row.split("~")
+                bricks[co_ord_str_to_tuple(end_1)] = co_ord_str_to_tuple(end_2)
+            return bricks
+
+        br = load(real_text)
+        for bk, bv in br.items():
+            assert all(bk[n] <= bv[n] for n in range(3))
+        assert min(k[2] for k in br.keys()) >= 1
+        assert min(k[0] for k in br.keys()) >= 0
+        assert min(k[1] for k in br.keys()) >= 0
+        print(f"Extent of snapshot: "
+              f"x={max(v[0] for v in br.values())}, "
+              f"y={max(v[1] for v in br.values())}, "
+              f"z={max(v[2] for v in br.values())}, ")
+
+        dimmed_bricks = a23.day_22_load_bricks(self.eg_input)
+        assert dimmed_bricks[(0, 2, 3)] == (3, 1, 1)
+        assert dimmed_bricks[(1, 1, 8)] == (1, 1, 2)
+
+    def test_collapse(self):
+        new_state = a23.day_22_collapse(
+            a23.day_22_load_bricks(self.eg_input)
+        )
+        assert isinstance(new_state, dict)
+        assert new_state[(1, 0, 1)] == (1, 3, 1)    # A
+        # print(new_state)
+        assert new_state[(0, 0, 2)] == (3, 1, 1)    # B
+        assert new_state[(0, 2, 2)] == (3, 1, 1)    # C
+        assert new_state[(0, 0, 3)] == (1, 3, 1)    # D
+        assert new_state[(2, 0, 3)] == (1, 3, 1)    # E
+        assert new_state[(0, 1, 4)] == (3, 1, 1)    # F
+        assert new_state[(1, 1, 5)] == (1, 1, 2)    # G
+
+        real_bricks = a23.day_22_load_bricks()
+        real_collapse = a23.day_22_collapse(real_bricks)
+        assert len(real_collapse) == len(real_bricks)
+        print(f"{len(real_collapse)=}\n{real_collapse}")
+        assert all(0 <= b[0] <= 9 for b in real_collapse)
+        assert all(0 <= b[1] <= 9 for b in real_collapse)
+        assert all(0 <= b[2] < 299 for b in real_collapse)
+        print(f"Highest brick now suspended at z={max(b[2] for b in real_collapse)}")
+
+    def test_process(self):
+        collapsed = a23.day_22_collapse(
+            a23.day_22_load_bricks(self.eg_input)
+        )
+        rel = a23.day_22_get_supporting_relationships(collapsed)
+        # print(rel)
+
+    def test_part_one(self):
+        assert a23.day_22_part_one(self.eg_input) == 5
+        lib.verify_solution(a23.day_22_part_one(), correct=421)
+
+
 class TestDay21:
     eg_map = """...........
 .....###.#.

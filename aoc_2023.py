@@ -18,6 +18,98 @@ class Puzzle23(Puzzle):
             return input_file.read()
 
 
+def day_22_load_bricks(text: str = "") -> {}:
+    if not text:
+        text = Puzzle23(22).get_text_input().strip("\n")
+
+    def co_ord_str_to_tuple(csv: str) -> (int,):
+        return tuple(int(v) for v in csv.split(","))
+
+    bricks = {}
+    for row in text.split("\n"):
+        end_1, end_2 = row.split("~")
+        start = co_ord_str_to_tuple(end_1)
+        end = co_ord_str_to_tuple(end_2)
+        bricks[start] = tuple(e - s + 1 for e, s in zip(end, start))
+    return bricks
+
+
+def day_22_collapse(bricks: {}) -> {}:
+    """in order of ascending initial height, drop each
+        brick as low as it will go """
+    fallen = {}
+    
+    def resting_level(br: (int,), dim: (int,)) -> int:
+        for z in range(br[2], 0, -1):
+            br_lower_by_one = {
+                k: v
+                for k, v in fallen.items()
+                if k[2] + v[2] == z
+            }
+            if br_lower_by_one:
+                br_footprint = day_22_brick_footprint(br, dim)
+                if any(br_footprint.intersection(
+                        set(
+                            (xf, yf)
+                            for xf in range(brkf[0], brkf[0] + brdf[0])
+                            for yf in range(brkf[1], brkf[1] + brdf[1])
+                        )
+                    )
+                    for brkf, brdf in br_lower_by_one.items()
+                ):
+                    return z
+        return 1
+
+    for brick in sorted(bricks, key=lambda b: b[2]):
+        new_z = max(1, resting_level(brick, bricks[brick]))
+        fallen[*brick[:2], new_z] = bricks[brick]
+    return fallen
+
+
+def day_22_brick_footprint(location: (int,), dimensions: (int,)) -> set:
+    return set(
+        (x, y)
+        for x in range(location[0], location[0] + dimensions[0])
+        for y in range(location[1], location[1] + dimensions[1])
+    )
+
+
+def day_22_get_supporting_relationships(structure: {}) -> {}:
+    sr = {k: [] for k in structure.keys()}
+    for br, dims in structure.items():
+        top = br[2] + dims[2]
+        one_level_up = {k: v for k, v in structure.items() if k[2] == top}
+        if one_level_up:
+            my_footprint = day_22_brick_footprint(br, dims)
+            sr[br] = [
+                hb_loc for hb_loc, hb_dims in one_level_up.items()
+                if my_footprint.intersection(day_22_brick_footprint(hb_loc, hb_dims))
+            ]
+    return sr
+
+
+def day_22_part_one(text: str = "") -> int:
+    collapsed = day_22_collapse(
+        day_22_load_bricks(text)
+    )
+    supporting = day_22_get_supporting_relationships(collapsed)
+    """For each brick in supporting:
+        if every brick it supports is also supported by at least
+        one other brick, or it is supporting no bricks, it can be safely removed"""
+    removable = 0
+    all_supported_bricks = [a for v in supporting.values() for a in v]
+    for brick in supporting:
+        if supporting[brick]:
+            if all(
+                all_supported_bricks.count(supported) > 1
+                for supported in supporting[brick]
+            ):
+                removable += 1
+        else:
+            removable += 1
+    return removable
+
+
 day_21_rocks = {}
 
 
