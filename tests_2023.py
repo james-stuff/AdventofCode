@@ -66,7 +66,7 @@ class TestDay22:
         real_bricks = a23.day_22_load_bricks()
         real_collapse = a23.day_22_collapse(real_bricks)
         assert len(real_collapse) == len(real_bricks)
-        print(f"{len(real_collapse)=}\n{real_collapse}")
+        # print(f"{len(real_collapse)=}\n{real_collapse}")
         assert all(0 <= b[0] <= 9 for b in real_collapse)
         assert all(0 <= b[1] <= 9 for b in real_collapse)
         assert all(0 <= b[2] < 299 for b in real_collapse)
@@ -82,6 +82,18 @@ class TestDay22:
     def test_part_one(self):
         assert a23.day_22_part_one(self.eg_input) == 5
         lib.verify_solution(a23.day_22_part_one(), correct=421)
+
+    def test_chain_reaction(self):
+        collapsed = a23.day_22_collapse(
+            a23.day_22_load_bricks(self.eg_input)
+        )
+        rel = a23.day_22_get_supporting_relationships(collapsed)
+        assert a23.day_22_chain_reaction(rel, (0, 1, 4)) == 1
+        assert a23.day_22_chain_reaction(rel, (1, 0, 1)) == 6
+
+    def test_part_two(self):
+        assert a23.day_22_part_two(self.eg_input) == 7
+        lib.verify_solution(a23.day_22_part_two(), part_two=True)
 
 
 class TestDay21:

@@ -96,7 +96,11 @@ def day_22_part_one(text: str = "") -> int:
     """For each brick in supporting:
         if every brick it supports is also supported by at least
         one other brick, or it is supporting no bricks, it can be safely removed"""
-    removable = 0
+    return len(day_22_removable_bricks(supporting))
+
+
+def day_22_removable_bricks(supporting: {}) -> [(int,)]:
+    safe = []
     all_supported_bricks = [a for v in supporting.values() for a in v]
     for brick in supporting:
         if supporting[brick]:
@@ -104,10 +108,51 @@ def day_22_part_one(text: str = "") -> int:
                 all_supported_bricks.count(supported) > 1
                 for supported in supporting[brick]
             ):
-                removable += 1
+                safe.append(brick)
         else:
-            removable += 1
-    return removable
+            safe.append(brick)
+    return safe
+
+
+day_22_cr_memo = {}
+
+
+def day_22_chain_reaction(supports: {}, brick_to_remove: (int,)) -> int:
+    """how many OTHER bricks fall if this one is removed?"""
+    falling = 0
+    local_supports = copy.deepcopy(supports)
+    print(f"{brick_to_remove=}", end=" -> ")
+
+    def is_supported(brick: (int,)) -> bool:
+        return brick in [
+            a for v in local_supports.values()
+            for a in v
+        ]
+
+    unsupported = [brick_to_remove]
+    while unsupported:
+        brick_to_fall = unsupported.pop()
+        falling += (brick_to_fall is not brick_to_remove)
+        might_fall = local_supports[brick_to_fall]
+        del local_supports[brick_to_fall]
+        unsupported.extend(
+            [*filter(lambda b: not is_supported(b), might_fall)]
+        )
+    print(f"{falling=}")
+    return falling
+
+
+def day_22_part_two(text: str = "") -> int:
+    collapsed = day_22_collapse(
+        day_22_load_bricks(text)
+    )
+    supporting = day_22_get_supporting_relationships(collapsed)
+    no_effect = day_22_removable_bricks(supporting)
+    return sum(
+        day_22_chain_reaction(supporting, brick)
+        for brick in sorted(collapsed.keys(), key=lambda k: k[2], reverse=True)
+        if brick not in no_effect
+    )
 
 
 day_21_rocks = {}
