@@ -1,9 +1,52 @@
+import collections
 import math
 import pprint
 import re
 import aoc_2023 as a23
 import library as lib
 from itertools import cycle
+
+
+class TestDay23:
+    eg_map = """#.#####################
+#.......#########...###
+#######.#########.#.###
+###.....#.>.>.###.#.###
+###v#####.#v#.###.#.###
+###.>...#.#.#.....#...#
+###v###.#.#.#########.#
+###...#.#.#.......#...#
+#####.#.#.#######.#.###
+#.....#.#.#.......#...#
+#.#####.#.#.#########v#
+#.#...#...#...###...>.#
+#.#.#v#######v###.###v#
+#...#.>.#...>.>.#.###.#
+#####v#.#.###v#.#.###.#
+#.....#...#...#.#.#...#
+#.#########.###.#.#.###
+#...###...#...#...#.###
+###.###.#.###v#####v###
+#...#...#.#.>.>.#.>.###
+#.###.###.#.###.#.#v###
+#.....###...###...#...#
+#####################.#"""
+
+    def clear_globals(self):
+        a23.day_23_walkable, a23.day_23_slopes = ({} for _ in range(2))
+
+    def test_part_one(self):
+        assert a23.day_23_part_one(self.eg_map) == 94
+        self.clear_globals()
+        lib.verify_solution(a23.day_23_part_one(), 2278)
+
+    def test_part_two(self):
+        self.clear_globals()
+        assert a23.day_23_part_two(self.eg_map) == 154
+        print("")
+        self.clear_globals()
+        lib.verify_solution(a23.day_23_part_two())
+
 
 
 class TestDay22:
@@ -93,7 +136,7 @@ class TestDay22:
 
     def test_part_two(self):
         assert a23.day_22_part_two(self.eg_input) == 7
-        lib.verify_solution(a23.day_22_part_two(), part_two=True)
+        lib.verify_solution(a23.day_22_part_two(), correct=39247, part_two=True)
 
 
 class TestDay21:
@@ -350,6 +393,100 @@ class TestDay20:
     def test_part_one(self):
         lib.verify_solution(a23.day_20_part_one(), 680_278_040)
 
+    def test_p2_exploration(self):
+        ff, cj, conn = a23.day_20_set_up()
+        print(f"There are {len(ff)} flip-flops and {len(cj)} conjunctions")
+        touched_ff = set()
+        pressed_times = 0
+        monitored_ff, state = "%bs", False
+        while pressed_times < 20:
+            print(f"{pressed_times=}")
+            a23.day_20_push_the_button(ff, cj, conn, pressed_times)
+            pressed_times += 1
+            ff_on = {f for f in ff if ff[f]}
+            first_touched = ff_on - touched_ff
+            touched_ff.update(first_touched)
+            if ff[monitored_ff] != state:
+                print(f"{pressed_times:>6} {monitored_ff}"
+                      f" is turned {'on' if ff[monitored_ff] else 'off'}")
+                state = ff[monitored_ff]
+        print(f"Remaining untouched flip-flops: {set(ff) - touched_ff}")
+        # LAST FFs to be ACTIVATED: {'gs', 'dn', 'pp', 'rc'}
+        """
+        There are 48 flip-flops and 9 conjunctions
+     1 {'fs', 'sh', 'ps', 'nm'}
+     2 {'db', 'rs', 'rr', 'bz'}
+     4 {'cf', 'cq', 'nv', 'ls'}
+     8 {'jr', 'vg', 'bv', 'sl'}
+    16 {'xz', 'gn', 'cg', 'kz'}
+    32 {'rq', 'tf', 'mj', 'dg'}
+    64 {'ff', 'hc', 'sr', 'xl'}
+   128 {'bk', 'vb', 'hp', 'vr'}
+   256 {'qd', 'tv', 'bs', 'ft'}
+   512 {'lh', 'lf', 'rj', 'sz'}
+  1024 {'nd', 'vx', 'pn', 'fz'}
+  2048 {'gs', 'dn', 'pp', 'rc'}
+  """
+
+            # print("".join(f"{'# ' if ff[f] else '  '}" for f in ff))
+            # print(''.join([f'{sum(cj[c].values())}' for c in cj]))
+            # print(f"{'' if pressed_times % 10 else pressed_times:>6} "
+            #       f"{''.join(['#' if len(cj[c]) == sum(cj[c].values()) else ' ' for c in cj])}")
+            # turned_on = sum(ff.values())
+            # print(f"{'' if pressed_times % 10 else pressed_times:>6} "
+            #       f"{turned_on}")
+            # if turned_on > 36:
+            #     print(f"{pressed_times:>6} {turned_on}")
+        # t, c = a23.day_20_load(a23.Puzzle23(20).get_text_input())
+        # involved = ["broadcaster"]
+        # s = 0
+        # while "rx" not in involved:
+        #     s += 1
+        #     print(f"Step {s:>2}: ", end="")
+        #     next_nodes = []
+        #     for node in involved:
+        #         next_nodes += c[node]
+        #     # print(" ".join(f"{t[nd]}{nd}" for nd in next_nodes if nd != "rx"))
+        #     print(f"{len(next_nodes)=} vs. {len(t)=}, {len(c)=}")
+        #     involved = next_nodes
+
+    def test_reverse_journey(self):
+        ff, cj, conn = a23.day_20_set_up()
+        t = a23.day_20_load_connections(a23.Puzzle23(20).get_text_input())
+
+        def triggered_by(receiver: str) -> [str]:
+            return [k for k, v in conn.items()
+                    if receiver in v]
+        end_points = ["&vf"]
+
+        for steps in range(2):
+            prev_ep = [*end_points]
+            if len(prev_ep) == 1:
+                end_points = triggered_by(end_points[0])
+                print(f"{prev_ep[0]} is triggered by {', '.join(end_points)}")
+            else:
+                # end_points = [new_ep for e in end_points for new_ep in triggered_by(e)]
+                # print(f" . . . which are in turn triggeed by {len(end_points)} receivers: {', '.join(full_name(rcv) for rcv in end_points)}")
+                print(f"in turn:")
+                for ep in end_points:
+                    print(f"\t{ep} is triggered by {', '.join(triggered_by(ep))}")
+
+    def test_with_logging(self):
+        ff, conj, con = a23.day_20_set_up()
+        data = [[*ff.keys(), *conj.keys()]]
+        for push in range(10_000):
+            a23.day_20_push_the_button(ff, conj, con, push)
+            data_row = ([int(ffv) for ffv in ff.values()] +
+                        [sum(cjv.values()) for cjv in conj.values()])
+            data.append(data_row)
+        # with open("output.csv", "w") as file:
+        #     file.write(
+        #         "\n".join(
+        #             ",".join(f"{item}" for item in row)
+        #             for row in data
+        #         )
+        #     )
+
     def test_part_two(self):
         """Only the conjunction vf transmits to rx.
             vf is itself the product of four other conjunctions
@@ -362,7 +499,16 @@ class TestDay20:
         For rx to receive a low pulse, vf must receive four high pulses:
             pm, mk, pk, hf
         But (up to 1,000 cycles) all its inputs are high (1/1) so it only receives four lows"""
-        a23.day_20_part_two()
+        """&vf is receiving a continuous run of lows seemingly from the start.
+            &pm, &mk, &pk and &hf must all be receiving highs, which means
+            their contributors must all be sending lows.  In theory, &vf->rx is
+            triggered when one of &gp, &bn, &rt or &cz sends a high, which
+            happens when any one of their inputs is a low"""
+        queue = collections.deque([("&bn", "&mk", False)])
+        ff, cj, conn = a23.day_20_set_up()
+        a23.day_20_process_button_press(ff, cj, conn, queue)
+        print(f"After simulation, {cj['&vf']=}")
+        # a23.day_20_part_two()
 
 
 class TestDay19:
