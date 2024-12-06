@@ -40,12 +40,44 @@ class TestDay23:
         self.clear_globals()
         lib.verify_solution(a23.day_23_part_one(), 2278)
 
-    def test_part_two(self):
+    def test_no_choice_routes(self):
+        a23.day_23_load_scene()
+        # NB. 34 points where path can split, only 2 where there are
+        #   no options (i.e. the end points)
+        turning_points = [
+            pt for pt in a23.day_23_walkable
+            if len(a23.day_23_walkable_neighbours(pt)) > 2
+        ]
+        print(f"In real map, there are {len(turning_points)} points where path can split")
+        ncps = a23.day_23_no_choice_paths()
+        print(f"{len(ncps)=}")
+        # for ncp in ncps:
+        #     print(f"\t{ncp[0]} to {ncp[-1]} of length {len(ncp)}")
+        print(f"All walkable points: {len(a23.day_23_walkable)}")
+        all_ncp_points = set()
+        for ncp in ncps:
+            all_ncp_points.update(set(ncp))
+        print(f"All points on ncps: {len(all_ncp_points)}")
         self.clear_globals()
+        a23.day_23_load_scene(self.eg_map)
+        assert len(a23.day_23_walkable_neighbours(lib.Point(0, 1))) == 1
+        assert len(a23.day_23_walkable_neighbours(lib.Point(1, 1))) == 2
+        assert len(a23.day_23_walkable_neighbours(lib.Point(3, 7))) == 2
+        assert len(a23.day_23_walkable_neighbours(lib.Point(3, 11))) == 3
+        eg_ncps = a23.day_23_no_choice_paths()
+
+    def test_part_two(self):
+        a23.day_23_load_scene(self.eg_map)
+        ncp = a23.day_23_ncp_as_dict()
+        # self.clear_globals()
         assert a23.day_23_part_two(self.eg_map) == 154
         print("")
         self.clear_globals()
-        lib.verify_solution(a23.day_23_part_two())
+        print(f"No. of walkable points: {len(a23.day_23_walkable)}")
+        solution = a23.day_23_part_two()
+        assert solution > 5478
+        lib.verify_solution(solution, 6734, part_two=True)
+        # Correct answer but took 08:25 minutes
 
 
 

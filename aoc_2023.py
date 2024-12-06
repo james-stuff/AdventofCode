@@ -34,8 +34,6 @@ def day_23_load_scene(text: str = ""):
                 if char != ".":
                     day_23_slopes[lib.Point(y, x)] = move_translation[char]
     day_23_walkable = frozenset(walkable)
-    # print(f"{len(day_23_walkable)=}\t{len(day_23_slopes)=}")
-    # print(day_23_slopes)
 
 
 def day_23_part_one(text: str = "") -> int:
@@ -68,26 +66,179 @@ def day_23_extend_route(route: [lib.Point], watch_slopes: bool = True) -> [[lib.
     return possible_routes
 
 
+def day_23_walkable_neighbours(point: lib.Point) -> [lib.Point]:
+    return [
+            mv(point) for mv in point_moves_2023.values()
+            if mv(point) in day_23_walkable
+        ]
+
+
+def day_23_ncp_as_dict() -> {}:
+    """unique id: (start point, end_point, length)"""
+    ncp_walks = {}
+    destination = lib.Point(*max(day_23_walkable))
+    choice_points = [lib.Point(0, 1)] + [
+        *filter(lambda pt: len(day_23_walkable_neighbours(pt)) > 2,
+                day_23_walkable)
+    ]
+    # assert len(choice_points) == 35
+    uid = 0
+    for cp in choice_points:
+        for start in day_23_walkable_neighbours(cp):
+            walk = [start]
+            next_point = start
+            while len(day_23_walkable_neighbours(next_point)) < 3 and next_point != destination:
+                valid_moves = [*filter(
+                    lambda mv:
+                    mv not in walk[-2:]
+                    and not (len(walk) == 1 and mv in choice_points),
+                    day_23_walkable_neighbours(next_point))]
+                if valid_moves:
+                    next_point = valid_moves[0]
+                    walk.append(next_point)
+                else:
+                    break
+            ncp_walks[uid] = (start, next_point, len(walk))
+            uid += 1
+    for k, v in ncp_walks.items():
+        print(f"{k:>3}: {v}")
+    return ncp_walks
+
+
+def day_23_no_choice_paths() -> [[lib.Point]]:
+    ncp = []
+    destination = lib.Point(*max(day_23_walkable))
+    starting_points_queue = collections.deque([lib.Point(0, 1)])
+    while starting_points_queue:
+        # print(f"{queue=}")
+        next_point = starting_points_queue.popleft()
+        # if next_point == lib.Point(7, 77):
+        #     print("in")
+        walk = [next_point]
+        while len(day_23_walkable_neighbours(next_point)) < 3:
+            moves = [mv(next_point) for mv in point_moves_2023.values()]
+            valid_moves = [*filter(
+                lambda mv:
+                mv in day_23_walkable and mv not in walk[-2:],
+                moves)]
+            if valid_moves:
+                if len(walk) < 2 and len(valid_moves) > 1:
+                    # don't go backwards (to last decision point)
+                    valid_moves = [vm for vm in valid_moves
+                                   if vm not in [
+                            w[-1] for w in ncp
+                                   ]]
+                next_point = valid_moves[0]
+                walk.append(next_point)
+            elif next_point == destination:
+                walk.append(next_point)
+                break
+            else:
+                print(f"No valid moves found from {next_point}")
+                print(1/0)
+        starting_points_queue.extend([
+            mv(next_point) for mv in point_moves_2023.values()
+            if mv(next_point) in day_23_walkable
+               and mv(next_point) not in walk
+               and mv(next_point) not in [
+                w[i] for w in ncp
+                for i in (0, -2)
+               ]
+               and mv(next_point) not in starting_points_queue
+        ])
+        if len(walk) > 2:
+            ncp.append(walk)
+            # print(f"\t{walk[0]} to {walk[-1]} of length {len(walk)}")
+    return ncp
+
+
 def day_23_part_two(text: str = "") -> int:
     day_23_load_scene(text)
-    walk_queue = collections.deque([[lib.Point(0, 1)]])
-    completed = []
     destination = lib.Point(*max(day_23_walkable))
-    log_size = 1
+    print(f"{destination=}")
+    ncps = day_23_ncp_as_dict()
+    neighbours_per_ncp_key = {}
+    for ncp_key in ncps.keys():
+        _, decision_point, _ = ncps[ncp_key]
+        dp_neighbours = day_23_walkable_neighbours(decision_point)
+        neighbours_per_ncp_key[ncp_key] = [
+            ncpk for ncpk, v in ncps.items()
+            if v[0] in dp_neighbours
+        ]
+    for a, b in neighbours_per_ncp_key.items():
+        print(f"{a:>3}: {b}")
+    best_so_far, completed_count = 0, 0
+    walk_queue = collections.deque([[0]])
+    qs = 16
+    skip_count = 0
     while walk_queue:
-        route = walk_queue.popleft()
-        for new_route in day_23_extend_route(route, watch_slopes=False):
-            if new_route[-1] == destination:
-                completed.append(new_route)
+        if len(walk_queue) > qs:
+            print(f"Queue size >= {qs}")
+            qs *= 2
+        walk = walk_queue.popleft()
+        # if ((best_so_far > 5000) and
+        #         (18791 - day_23_calc_ruled_out_distance(walk, ncps)) < (best_so_far - day_23_hike_length(walk, ncps))):
+        #     skip_count += 1
+        #     continue
+        available_continuations = [
+            step for step in neighbours_per_ncp_key[walk[-1]]
+            if step not in walk
+            and not any(ncps[w][1] == ncps[step][1] for w in walk)
+        ]
+        for ac in available_continuations:
+            extended_walk = walk + [ac]
+            if ncps[ac][1] == destination:
+                completed_count += 1
+                if (hike_length := day_23_hike_length(extended_walk, ncps)) > best_so_far:
+                    best_so_far = hike_length
+                    print(f"{best_so_far=} {skip_count=}")
+                    # if best_so_far > 4_000:
+                    #     len_before = len(walk_queue)
+                    #     walk_queue = collections.deque([
+                    #         *filter(
+                    #             lambda w:
+                    #             day_23_calc_ruled_out_distance(w, ncps) < 3_000
+                    #         , walk_queue
+                    #     )
+                    #     ])
+                    #     if len(walk_queue) < len_before:
+                    #         print(f"Queue length {len_before} -> {len(walk_queue)}")
             else:
-                walk_queue.append(new_route)
-        if len(walk_queue) >= log_size:
-            log_size *= 2
-            print(f"{len(walk_queue)}, {len(route)}")
-    print(f"{len(completed)=}.  Walks are of lengths:")
-    for walk in completed:
-        print(len(walk) - 1, end="\t")
-    return max(len(cw) - 1 for cw in completed)
+                walk_queue.append(extended_walk)
+    # assert all(len(set(w)) == len(w) for w in completed)
+    # return max(sum(ncps[s][2] for s in c) for c in completed)
+    return best_so_far
+
+
+def day_23_hike_length(hike: [int,], ncp_details: {}) -> int:
+    return sum(ncp_details[s][2] for s in hike)
+
+
+def day_23_calc_ruled_out_distance(hike: [int], ncp_details: {}) -> int:
+    ruled_out_distance = 0
+    for step in hike:
+        visited_end_point = ncp_details[step][1]
+        unavailable_steps = [
+            s for s, d in ncp_details.items()
+            if s != step and d[1] == visited_end_point
+        ]
+        ruled_out_distance += sum([
+            ncp_details[us][2] for us in unavailable_steps
+        ])
+    # print(f"{ruled_out_distance//2=}")
+    return ruled_out_distance
+
+"""How to slim down the possibilities in part two?
+        Part Two example answer expanded by >60% on Part One
+            (to slightly more than 72% of all walkable points) 
+        Can we expect similar increase with real map?
+        As routes are traversed, some sections will become unavailable
+        due to their end point having been visited already.  Once
+        the accumulated length of unavailable sections becomes 
+        greater than that needed for a route to beat (3,000, or
+        longest hike so far?) that route can be dropped from the queue
+        NB. Only need to save the max. hike length so far, not every
+        completed hike"""
 
 
 def day_22_load_bricks(text: str = "") -> {}:
