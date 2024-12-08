@@ -88,12 +88,29 @@ class TestDay6:
         assert a.day_6_distance_to_next_blocker(lib.Point(9, 0), "U", room) == 1
         assert a.day_6_distance_to_next_blocker(
             lib.Point(1, 9), "L", room) == 1_000_000
+        bu = {
+            "U": lib.Point(11, 10),
+            "R": lib.Point(10, 9),
+            "D": lib.Point(9, 10),
+            "L": lib.Point(10, 11),
+        }
+        for facing, expected in bu.items():
+            assert a.day_6_back_up(lib.Point(10, 10), facing) == expected
+        tr = {
+            "U": "R",
+            "R": "D",
+            "D": "L",
+            "L": "U",
+        }
+        for facing, expected in tr.items():
+            assert a.day_6_turn_to_right(facing) == expected
 
     def test_part_two(self):
-        # assert a.day_6_part_two(self.eg_map) == 6
+        assert a.day_6_part_two(self.eg_map) == 6
         p2_solution = a.day_6_part_two()
         assert p2_solution > 1884
-        lib.verify_solution(a.day_6_part_two(), part_two=True)
+        lib.verify_solution(p2_solution, 1919, part_two=True)
+        # still takes over 3 minutes
 
 
 class TestDay5:

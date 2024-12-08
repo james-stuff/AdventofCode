@@ -234,60 +234,55 @@ def day_6_part_two(text: str = "") -> int:
     # part one.  So only deal with its first appearance
     all_visited_data = day_6_visited_locations_with_facing(text)
     starting_point = all_visited_data[0][0]
-    visited_points = {pt for pt, _ in all_visited_data
-                      if pt != starting_point}
+    candidate_points = {pt for pt, _ in all_visited_data
+                        if pt != starting_point}
     m[starting_point] = "."
     pf_will_leave = set()
     known_routes_to_exit = []
-    len_vp, point_counter = len(visited_points), 0
-    for point in visited_points:
+    len_cp, point_counter = len(candidate_points), 0
+    for candidate in candidate_points:
         point_counter += 1
-        modded_map = copy.deepcopy(m)
-        modded_map[point] = "#"
-        _, f = [vp for vp in all_visited_data if vp[0] == point][0]
-        # print(f"Point: {point}, originally facing {f}")
-        obstacle_point = point
-        pt = day_6_back_up(point, f)
+        modded_map = {**m}
+        modded_map[candidate] = "#"
+        _, f = [vp for vp in all_visited_data if vp[0] == candidate][0]
+        pt = day_6_back_up(candidate, f)
         f = day_6_turn_to_right(f)
         will_visit = []
-        no_escape = False
         while pt in modded_map:
-            dist = day_6_distance_to_next_blocker(pt, f, modded_map) - 1
-            pt = day_6_move_n_steps_in_direction(pt, f, dist)
+            pt = day_6_move_n_steps_in_direction(
+                pt, f,
+                day_6_distance_to_next_blocker(pt, f, modded_map) - 1
+            )
             if (pt, f) in will_visit:
                 new_obstacles += 1
                 break
+            elif pt not in modded_map:
+                if all(
+                        lib.manhattan_distance(wv[0], candidate) > 1
+                        for wv in will_visit
+                ):
+                    if will_visit and will_visit[0] not in pf_will_leave:
+                        known_routes_to_exit.append(will_visit)
+                    pf_will_leave.update(will_visit)
             will_visit.append((pt, f))
-            if len(will_visit) > 3:
+            if (pt, f) in pf_will_leave and len(will_visit) > 10:
                 last_three = will_visit[-3:]
                 for kre in known_routes_to_exit:
-                    if any(
+                    if ((pt, f) in kre) and any(
                         kre[i:i + 3] == last_three
                         for i, loc in enumerate(kre[:-3])
                     ):
                         spot = kre.index(last_three[0])
-                        # print(f"Found repeated route!! {last_three=} found={kre[spot:spot + 3]}")
-                        if day_6_escape_route_blocked(kre[spot:], obstacle_point):
-                            # print(" . . . but the route is blocked :(")
+                        if day_6_escape_route_blocked(kre[spot:], candidate):
                             no_escape = True
                         else:
                             pt = (-1, -1), ""
                             break
-            # if (pt, f) in pf_will_leave:
-            #     print(f"\t{pt, f} is known to leave grid")
-            #     break
             f = day_6_turn_to_right(f)
-        if dist > 10_000:
-            if all(
-                lib.manhattan_distance(wv[0], obstacle_point) > 1
-                for wv in will_visit[1:]
-            ):
-                known_routes_to_exit.append(will_visit)
-                # pf_will_leave.update(will_visit[1:])
         if point_counter % 100 == 0:
-            print(f"{point_counter:,} of {len_vp} points. "
+            print(f"{point_counter:,} of {len_cp} points. "
                   f"{len(will_visit):,} visited before "
-                  f"{'leaving grid' if dist > 10_000 else 'looping'} "
+                  f"{'leaving grid' if pt not in modded_map else 'looping'} "
                   f"{len(known_routes_to_exit)=}")
     assert 0 < new_obstacles < day_6_part_one(text)
     return new_obstacles
@@ -297,11 +292,11 @@ def day_6_escape_route_blocked(route: [(lib.Point, str)],
                                blocker: lib.Point) -> bool:
     for i, loc in enumerate(route[:-1]):
         pt1, pt2 = (x[0] for x in (loc, route[i + 1]))
-        if (pt1[0] < blocker[0] < pt2[0] or
-                pt2[0] < blocker[0] < pt1[0]) and pt1[1] == blocker[1]:
+        if (pt1[0] <= blocker[0] <= pt2[0] or
+                pt2[0] <= blocker[0] <= pt1[0]) and pt1[1] == blocker[1]:
             return True
-        if (pt1[1] < blocker[1] < pt2[1] or
-                pt2[1] < blocker[1] < pt1[1]) and pt1[0] == blocker[0]:
+        if (pt1[1] <= blocker[1] <= pt2[1] or
+                pt2[1] <= blocker[1] <= pt1[1]) and pt1[0] == blocker[0]:
             return True
     return False
 
