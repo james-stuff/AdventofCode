@@ -1,5 +1,95 @@
 import aoc_2024 as a
 import library as lib
+import timeit
+
+
+class TestDay11:
+    eg_stones = "0 1 10 99 999"
+    main_eg = "125 17"
+
+    def test_p1_dev(self):
+        assert a.day_11_load_stones(self.eg_stones) == [0, 1, 10, 99, 999]
+        assert all(isinstance(i, int) for i in a.day_11_load_stones())
+        assert a.day_11_load_stones()[-1] == 91
+        after_1 = "1 2024 1 0 9 9 2021976"
+        st = a.day_11_load_stones(self.eg_stones)
+        blinked = a.day_11_blink(st)
+        assert len(blinked) >= len(st)
+        assert all(isinstance(i, int) for i in blinked)
+        assert blinked == a.day_11_load_stones(after_1)
+        main_st = a.day_11_load_stones(self.main_eg)
+        cumulative_expected = [
+            "253000 1 7",
+            "253 0 2024 14168",
+            "512072 1 20 24 28676032",
+            "512 72 2024 2 0 2 4 2867 6032",
+            "1036288 7 2 20 24 4048 1 4048 8096 28 67 60 32",
+            "2097446912 14168 4048 2 0 2 4 40 48 2024 40 48 80 96 2 8 6 7 6 0 3 2",
+        ]
+        for expected in cumulative_expected:
+            main_st = a.day_11_blink(main_st)
+            assert main_st == a.day_11_load_stones(expected)
+
+    def test_part_one(self):
+        assert a.day_11_part_one(self.main_eg) == 55312
+        lib.verify_solution(a.day_11_part_one(), 193899)
+
+    def test_p2_exploration(self):
+        list_1 = a.day_11_load_stones(self.main_eg)
+        assert a.day_11_part_one(self.main_eg) == sum([
+            a.day_11_part_one(s) for s in self.main_eg.split(" ")
+        ])
+        """Each stone's behaviour is completely independent"""
+        """Could I get a count for each number if it's blinked 35
+            times, then run for 40 times, counting how many of each
+            number there are in the list, and just sum their products?"""
+
+    def test_part_two(self):
+        lib.verify_solution(a.day_11_part_two(), 229682160383225, part_two=True)
+
+
+class TestDay10:
+    eg_map = """89010123
+78121874
+87430965
+96549874
+45678903
+32019012
+01329801
+10456732"""
+
+    def test_part_one(self):
+        assert a.day_10_part_one(self.eg_map) == 36
+        lib.verify_solution(a.day_10_part_one(), 482)
+
+    def test_part_two(self):
+        assert a.day_10_part_two(self.eg_map) == 81
+        lib.verify_solution(a.day_10_part_two(), 1094, part_two=True)
+
+
+class TestDay9:
+    trivial_eg = "12345"
+    eg_disk_map = "2333133121414131402"
+
+    def test_part_one(self):
+        dm = a.day_9_load_raw_map(self.eg_disk_map)
+        assert dm[0] == (0, 2)
+        assert dm[9] == (40, 2)
+        assert a.day_9_part_one(self.eg_disk_map) == 1928
+        solution = a.day_9_part_one()
+        assert solution < 15617128862801
+        # edge case is free space sections of zero length.
+        # only one of these in eg. file, whose position is
+        # second-to-last in the input, so it becomes irrelevant,
+        # whereas in real text there are many zeroes.  Solved by:
+        # adding check and only adding to the free space dict
+        # if it's of non-zero length.
+        lib.verify_solution(solution, 6291146824486)
+
+    def test_part_two(self):
+        assert a.day_9_part_two(self.eg_disk_map) == 2858
+        lib.verify_solution(a.day_9_part_two(),
+                            6307279963620, part_two=True)
 
 
 class TestDay8:
@@ -106,11 +196,20 @@ class TestDay6:
             assert a.day_6_turn_to_right(facing) == expected
 
     def test_part_two(self):
+        assert a.day_6_part_two_simple(self.eg_map) == 6
+        lib.verify_solution(a.day_6_part_two_simple(), 1919, part_two=True)
+
         assert a.day_6_part_two(self.eg_map) == 6
         p2_solution = a.day_6_part_two()
         assert p2_solution > 1884
         lib.verify_solution(p2_solution, 1919, part_two=True)
         # still takes over 3 minutes
+
+    def test_timings(self):
+        timeit.timeit(
+            "a.day_6_part_one()", "import aoc_2024 as a",
+            number=10
+        )
 
 
 class TestDay5:

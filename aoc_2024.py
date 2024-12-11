@@ -1,3 +1,4 @@
+import collections
 import copy
 import math
 from main import Puzzle
@@ -12,6 +13,246 @@ class Puzzle24(Puzzle):
     def get_text_input(self) -> str:
         with open(f'inputs\\2024\\input{self.day}.txt', 'r') as input_file:
             return input_file.read()
+
+
+def day_11_part_one(text: str = "") -> int:
+    stones = day_11_load_stones(text)
+    for _ in range(25):
+        stones = day_11_blink(stones)
+    return len(stones)
+
+
+def day_11_part_two(text: str = "") -> int:
+    stones = {
+        s: 1
+        for s in day_11_load_stones(text)
+    }
+    transformations = {}
+    for b_count in range(75):
+        next_stones = collections.defaultdict(int)
+        for st, no_of_st in stones.items():
+            if st in transformations:
+                tr = transformations[st]
+                for nn in {*tr}:
+                    next_stones[nn] += (no_of_st * tr.count(nn))
+            else:
+                trans = day_11_blink([st])
+                transformations[st] = trans
+                for nn in {*trans}:
+                    next_stones[nn] += (no_of_st * trans.count(nn))
+        stones = next_stones
+        if not (b_count + 1) % 5:
+            print(f"Blinked {b_count + 1} times, now have {len(stones)} stones")
+            print(f"\t{len(transformations)=}")
+    return sum(stones.values())
+
+
+def day_11_load_stones(text: str = "") -> [int]:
+    if not text:
+        text = Puzzle24(11).get_text_input()
+    return [int(n) for n in text.split(" ")]
+
+
+def day_11_blink(stones: [int]) -> [int]:
+    transformed = []
+    for stone in stones:
+        if stone == 0:
+            transformed.append(1)
+        else:
+            as_string = f"{stone}"
+            if not len(as_string) % 2:
+                midway = len(as_string) // 2
+                transformed.extend(
+                    [
+                        int(f"{as_string[:midway]}"),
+                        int(f"{as_string[midway:]}")
+                    ])
+            else:
+                transformed.append(stone * 2024)
+    return transformed
+
+
+def day_10_part_one(text: str = "") -> int:
+    m = day_10_load_map(text)
+    trailheads, summits = (m[i] for i in (0, 9))
+    return sum(day_10_can_reach(th, su, m)
+               for th in trailheads
+               for su in summits)
+
+
+def day_10_can_reach(trailhead: int, summit: int, area: {}) -> bool:
+    path_queue = [[trailhead]]
+    while path_queue:
+        path = path_queue.pop()
+        height = [k for k, v in area.items() if path[-1] in v][0]
+        for ngb in filter(
+                lambda pt: pt in area[height + 1],
+                day_10_neighbours(path[-1], area)
+        ):
+            if ngb == summit:
+                return True
+            elif height < 8:
+                path_queue.append(path + [ngb])
+    return False
+
+
+def day_10_part_two(text: str = "") -> int:
+    m = day_10_load_map(text)
+    trailheads, summits = (m[i] for i in (0, 9))
+    return sum(day_10_count_ways_to_reach(th, su, m)
+               for th in trailheads
+               for su in summits)
+
+
+def day_10_count_ways_to_reach(trailhead: int, summit: int, area: {}) -> int:
+    possible_routes = 0
+    path_queue = [[trailhead]]
+    while path_queue:
+        path = path_queue.pop()
+        height = [k for k, v in area.items() if path[-1] in v][0]
+        for ngb in filter(
+                lambda pt: pt in area[height + 1],
+                day_10_neighbours(path[-1], area)
+        ):
+            if ngb == summit:
+                possible_routes += 1
+            elif height < 8:
+                path_queue.append(path + [ngb])
+    return possible_routes
+
+
+def day_10_load_map(text: str = "") -> {}:
+    if not text:
+        text = Puzzle24(10).get_text_input()
+    topo_map = {
+        int(t) if t.isnumeric() else t:
+        {m.start() for m in re.finditer(t, text)}
+        for t in "".join(f"{n}" for n in range(10)) + "\n"
+    }
+    # for k in topo_map.keys():
+    #     print(f"{k:>2}: {topo_map[k]}")
+    return topo_map
+
+
+def day_10_neighbours(location: int, topography: {}) -> {}:
+    line_length = min(topography["\n"]) + 1
+    return (location + (d * j) for d, j in
+            itertools.product((-1, 1), (1, line_length)))
+
+
+def day_9_part_one(text: str = "") -> int:
+    return day_9_checksum(
+        day_9_compact(day_9_load_raw_map(text))
+    )
+
+
+def day_9_load_raw_map(text: str = "") -> {}:
+    if not text:
+        text = Puzzle24(9).get_text_input().strip("\n")
+    layout = {}
+    get_file = True
+    loc, file_id = 0, -1
+    for ch in text:
+        size = int(ch)
+        if get_file:
+            file_id += 1
+            layout[file_id] = loc, size
+        loc += size
+        get_file = not get_file
+    assert all(s <= 9 for ll, s in layout.values())
+    print(f"{len(text)=}")
+    assert len(layout) == (len(text) // 2) + 1
+    return layout
+
+
+def day_9_compact(file_pos: {}) -> {}:
+    free_space = day_9_find_free_space(file_pos)
+
+    def fs_to_left(pos: int) -> {}:
+        return {p: l for p, l in free_space.items() if p < pos}
+
+    compacted = {}
+    for file_id in sorted(file_pos.keys(), reverse=True):
+        position, length = file_pos[file_id]
+        if sum(fs_to_left(position).values()):
+            new_compacted_item = []
+            while length:
+                fsl = fs_to_left(position).items()
+                next_free_space = min(fsl) if fsl else (0, 0)
+                start, available = next_free_space
+                if available:
+                    use_fs = min(length, available)
+                    length -= use_fs
+                    del free_space[start]
+                    new_compacted_item.append((start, use_fs))
+                    if available - use_fs:
+                        free_space[start + use_fs] = available - use_fs
+                else:
+                    new_compacted_item.append((position, length))
+                    break
+            compacted[file_id] = new_compacted_item
+        else:
+            compacted[file_id] = [file_pos[file_id]]
+    # print(f"After: {free_space=}")
+    # print(f"{compacted=}")
+    for k in file_pos:
+        assert sum(v[1] for v in compacted[k]) == file_pos[k][1]
+        # print(f"{k} ok;", end="")
+    return compacted
+
+
+def day_9_find_free_space(file_pos: {}) -> {}:
+    free_space = {}
+    for fid in range(max(file_pos.keys())):
+        s, l = file_pos[fid]
+        fs_start = s + l
+        fs_length = file_pos[fid + 1][0] - fs_start
+        if fs_length:
+            free_space[fs_start] = fs_length
+    # print(f"{free_space=}")
+    # does it matter that final element of free space = 0?
+    assert all(s <= 9 for s in free_space.values())
+    print(f"Zeroes in free_space values: {sum(fs_len == 0 for fs_len in free_space.values())}")
+    return free_space
+
+
+def day_9_checksum(compacted_map: {}) -> int:
+    checksum = 0
+    for k, v in compacted_map.items():
+        for li in v:
+            start, length = li
+            for index in range(length):
+                checksum += (start + index) * k
+    return checksum
+
+
+def day_9_part_two(text: str = "") -> int:
+    return day_9_checksum(
+        day_9_p2_compact(day_9_load_raw_map(text))
+    )
+
+
+def day_9_p2_compact(file_pos: {}) -> {}:
+    new_layout = {}
+    free_space = day_9_find_free_space(file_pos)
+
+    def large_enough_fs_to_left(pos: int, required_size: int) -> {}:
+        return {p: s for p, s in free_space.items()
+                if p < pos and s >= required_size}
+
+    for file_id in sorted(file_pos.keys(), reverse=True):
+        position, length = file_pos[file_id]
+        available_spots = large_enough_fs_to_left(position, length)
+        if available_spots:
+            leftmost_pos, free_length = min(available_spots.items())
+            new_layout[file_id] = [(leftmost_pos, length)]
+            del free_space[leftmost_pos]
+            free_length -= length
+            if free_length:
+                free_space[leftmost_pos + length] = free_length
+        else:
+            new_layout[file_id] = [file_pos[file_id]]
+    return new_layout
 
 
 def day_8_map_from_input(text: str = "") -> {}:
@@ -161,25 +402,36 @@ def day_6_load_map(text: str = "") -> {}:
 
 
 def day_6_part_one(text: str = "") -> int:
-    return len({vl[0] for vl in day_6_visited_locations_with_facing(text)})
+    room = day_6_load_map(text)
+    return len(
+        {
+            vl[0] for vl in
+            day_6_visited_locations_with_facing(
+                room, [k for k, v in room.items() if v == "^"][0])
+            if vl[0] in room
+        }
+    )
 
 
-def day_6_visited_locations_with_facing(map_text: str) -> [(lib.Point, str)]:
-    room = day_6_load_map(map_text)
-    guard_pos = [k for k, v in room.items() if v == "^"][0]
-    facing = "U"
-    visited = [(guard_pos, facing)]
+def day_6_visited_locations_with_facing(
+        room: {},
+        guard_pos: lib.Point,
+        facing: str = "U") -> [(lib.Point, str)]:
+    visited = {(guard_pos, facing)}
     room[guard_pos] = "."
     while guard_pos in room:
         loc_in_front = pm23[facing](guard_pos)
         if loc_in_front in room:
             if room[loc_in_front] == ".":
                 guard_pos = loc_in_front
-                visited.append((guard_pos, facing))
+                if (guard_pos, facing) in visited:
+                    break
+                visited.add((guard_pos, facing))
             else:
                 facing = day_6_turn_to_right(facing)
         else:
             guard_pos = loc_in_front
+            visited.add((guard_pos, facing))
     return visited
 
 
@@ -223,6 +475,30 @@ def day_6_move_n_steps_in_direction(
     return lib.Point(*(c + d for c, d in zip(point, delta)))
 
 
+def day_6_part_two_simple(text: str = "") -> int:
+    m = day_6_load_map(text)
+    new_obstacles = 0
+    starting_point = [k for k, v in m.items() if v == "^"][0]
+    all_visited_data = day_6_visited_locations_with_facing(m, starting_point)
+    candidate_points = {pt for pt in all_visited_data
+                        if pt[0] != starting_point}
+    m[starting_point] = "."
+    loop_counter = 0
+    for candidate, f in candidate_points:
+        loop_counter += 1
+        m[candidate] = "#"
+        pt = day_6_back_up(candidate, f)
+        f = day_6_turn_to_right(f)
+        will_visit = day_6_visited_locations_with_facing(m, pt, f)
+        if all(wv[0] in m for wv in will_visit):
+            new_obstacles += 1
+        m[candidate] = "."
+        if loop_counter % 100 == 0:
+            print(f"{loop_counter:,}: {new_obstacles=}")
+    return new_obstacles
+
+
+
 def day_6_part_two(text: str = "") -> int:
     """Idea: it's only worth placing an obstacle in the
             area the guard can already reach (so get the
@@ -234,29 +510,30 @@ def day_6_part_two(text: str = "") -> int:
     # part one.  So only deal with its first appearance
     all_visited_data = day_6_visited_locations_with_facing(text)
     starting_point = all_visited_data[0][0]
-    candidate_points = {pt for pt, _ in all_visited_data
-                        if pt != starting_point}
+    candidate_points = {pt for pt in all_visited_data
+                        if pt[0] != starting_point}
     m[starting_point] = "."
     pf_will_leave = set()
     known_routes_to_exit = []
     len_cp, point_counter = len(candidate_points), 0
-    for candidate in candidate_points:
+    for candidate, f in candidate_points:
         point_counter += 1
-        modded_map = {**m}
-        modded_map[candidate] = "#"
-        _, f = [vp for vp in all_visited_data if vp[0] == candidate][0]
+        # modded_map = {**m}
+        m[candidate] = "#"
+        # _, f = [vp for vp in all_visited_data if vp[0] == candidate][0]
         pt = day_6_back_up(candidate, f)
         f = day_6_turn_to_right(f)
         will_visit = []
-        while pt in modded_map:
+        no_escape = False
+        while pt in m:
             pt = day_6_move_n_steps_in_direction(
                 pt, f,
-                day_6_distance_to_next_blocker(pt, f, modded_map) - 1
+                day_6_distance_to_next_blocker(pt, f, m) - 1
             )
             if (pt, f) in will_visit:
                 new_obstacles += 1
                 break
-            elif pt not in modded_map:
+            elif pt not in m:
                 if all(
                         lib.manhattan_distance(wv[0], candidate) > 1
                         for wv in will_visit
@@ -273,16 +550,19 @@ def day_6_part_two(text: str = "") -> int:
                         for i, loc in enumerate(kre[:-3])
                     ):
                         spot = kre.index(last_three[0])
+                        # print(f"Found repeated route!! {last_three=} found={kre[spot:spot + 3]}")
                         if day_6_escape_route_blocked(kre[spot:], candidate):
+                            # print(" . . . but the route is blocked :(")
                             no_escape = True
                         else:
                             pt = (-1, -1), ""
                             break
             f = day_6_turn_to_right(f)
+        m[candidate] = "."
         if point_counter % 100 == 0:
             print(f"{point_counter:,} of {len_cp} points. "
                   f"{len(will_visit):,} visited before "
-                  f"{'leaving grid' if pt not in modded_map else 'looping'} "
+                  f"{'leaving grid' if pt not in m else 'looping'} "
                   f"{len(known_routes_to_exit)=}")
     assert 0 < new_obstacles < day_6_part_one(text)
     return new_obstacles
