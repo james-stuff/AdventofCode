@@ -3,6 +3,17 @@ import library as lib
 import timeit
 
 
+class TestDay12:
+    def test_part_one(self):
+        # print(a.day_12_load_map_data())
+        # print(a.day_12_all_contiguous(1, a.day_12_load_map_data()))
+        # print(a.day_12_find_regions(a.day_12_load_map_data()))
+        lib.verify_solution(a.day_12_part_one())
+
+    def test_part_two(self):
+        lib.verify_solution(a.day_12_part_two(), part_two=True)
+
+
 class TestDay11:
     eg_stones = "0 1 10 99 999"
     main_eg = "125 17"

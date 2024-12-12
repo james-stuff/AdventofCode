@@ -15,6 +15,129 @@ class Puzzle24(Puzzle):
             return input_file.read()
 
 
+def day_12_load_map_data() -> [{}]:
+    text = Puzzle24(12).get_text_input()
+    return {
+        ch: {m.start() for m in
+             re.finditer(ch, text)}
+        for ch in {*text}
+    }
+
+
+def day_12_find_regions(map_data: {}) -> {}:
+    regions = {}
+    for letter in map_data:
+        if letter != "\n":
+            l_regions = []
+            letter_inst = {*map_data[letter]}
+            while letter_inst:
+                pos = [*letter_inst][0]
+                block = day_12_all_contiguous(pos, map_data)
+                l_regions.append(block)
+                letter_inst -= block
+            regions[letter] = l_regions
+    return regions
+
+
+def day_12_all_contiguous(pos: int, map_data: {}, existing: {} = None) -> {int}:
+    if existing is None:
+        existing = set()
+    if day_12_like_neighbours(pos, map_data):
+        contiguous = {pos}
+        existing.add(pos)
+        n_sets = [day_12_all_contiguous(p1, map_data, existing)
+                  for p1 in day_12_like_neighbours(pos, map_data)
+                  if p1 not in existing]
+        for s in n_sets:
+            contiguous.update(s)
+        return contiguous
+    return {pos}
+
+
+def day_12_like_neighbours(pos: int, map_data: {},
+                           inverse: bool = False, text: str = "") -> {int}:
+    letter = [k for k, v in map_data.items()
+              if pos in v][0]
+    if inverse:
+        return {
+            pp for pp in day_12_all_neighbours(pos, map_data)
+            if pp < 0 or pp >= len(text)
+               or pp in map_data["\n"]
+               or text[pp] != letter
+        }
+    occurrences = map_data[letter]
+    return day_12_all_neighbours(pos, map_data).intersection(occurrences)
+
+
+def day_12_all_neighbours(pos: int, map_data: {}) -> {int}:
+    line_length = min(map_data["\n"]) + 1
+    return {pos + i for i in (1, -1, line_length, -line_length)}
+
+
+def day_12_part_one() -> int:
+    md = day_12_load_map_data()
+    regions_by_letter = day_12_find_regions(md)
+    total_cost = 0
+    for letter in regions_by_letter:
+        for reg in regions_by_letter[letter]:
+            area = len(reg)
+            perimeter = sum(
+                4 - len(day_12_like_neighbours(pp, md))
+                for pp in reg
+            )
+            total_cost += area * perimeter
+    return total_cost
+
+
+def day_12_part_two(text: str = "") -> int:
+    if not text:
+        text = Puzzle24(12).get_text_input()
+    md = day_12_load_map_data()
+    every_square = [
+        loc
+        for k, v in md.items()
+        for loc in v
+        if k.isalpha()]
+    fence_pairs = [
+        (sq, ngb)
+        for sq in every_square
+        for ngb in day_12_like_neighbours(sq, md, inverse=True, text=text)
+    ]
+    print(f"{len(fence_pairs)=}")
+    return sum(
+        day_12_count_sides(r, fence_pairs) * len(r)
+        for reg in day_12_find_regions(md).values()
+        for r in reg
+        # if reg == "T"   # TODO: change back to "\n"
+    )
+
+
+def day_12_count_sides(region_locs: {}, boundary_pairs: []) -> int:
+    total_sides, line_length = 0, 141
+    b_pairs = [*filter(lambda bp: bp[0] in region_locs, boundary_pairs)]
+    for facing_diff, f_name in zip(
+            [1, -1, line_length, -line_length],
+            ["left", "right", "up", "down"]
+    ):
+        facing_this_way = [
+            *filter(lambda bb: bb[0] == bb[1] + facing_diff, b_pairs)
+        ]
+        ftw_sides = 0
+        # print(facing_this_way)
+        ftw_pos = [pp[0] for pp in facing_this_way]
+        while ftw_pos:
+            n = min(ftw_pos)
+            run = []
+            while n in ftw_pos:
+                run.append(n)
+                n += abs(line_length if abs(facing_diff) == 1 else 1)
+            ftw_pos = [*filter(lambda x: x not in run, ftw_pos)]
+            ftw_sides += 1
+        # print(f"There are {ftw_sides} {f_name}-facing sides")
+        total_sides += ftw_sides
+    return total_sides
+
+
 def day_11_part_one(text: str = "") -> int:
     stones = day_11_load_stones(text)
     for _ in range(25):
