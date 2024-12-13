@@ -15,6 +15,58 @@ class Puzzle24(Puzzle):
             return input_file.read()
 
 
+def day_13_part_one(text: str = "") -> int:
+    if not text:
+        text = Puzzle24(13).get_text_input()
+    return sum(
+        day_13_prize_cost(
+            day_13_extract_game_data(raw_game_data)
+        )
+        for raw_game_data in text.split("\n\n")
+    )
+
+
+def day_13_extract_game_data(text: str) -> {}:
+    game_data = {}
+    gd_keys = "abp"
+    for k, data in zip(
+            gd_keys,
+            re.finditer(r": X[+-=]\d+, Y[+-=]\d+", text)
+    ):
+        values = (
+            int(m.group())
+            for m in re.finditer(r"[+-]*\d+", data.group())
+        )
+        game_data[k] = tuple(values)
+    return game_data
+
+
+def day_13_prize_cost(gd: {}) -> int:
+    """Zero if prize unreachable"""
+    if gd["b"][0] * gd["a"][1] == gd["b"][1] * gd["a"][0]:
+        return 0
+    bb = ((gd["p"][0] * gd["a"][1]) - (gd["p"][1] * gd["a"][0])) / ((gd["b"][0] * gd["a"][1]) - (gd["b"][1] * gd["a"][0]))
+    aa = (gd["p"][1] - (bb * gd["b"][1])) / gd["a"][1]
+    if all(math.isclose(n, int(n)) for n in (aa, bb)):
+        return (3 * int(aa)) + int(bb)
+    return 0
+
+
+def day_13_part_two(text: str = "") -> int:
+    if not text:
+        text = Puzzle24(13).get_text_input()
+    all_game_data = [
+        day_13_extract_game_data(t)
+        for t in text.split("\n\n")
+    ]
+    total_spending = 0
+    big_number = 10000000000000
+    for gd in all_game_data:
+        gd["p"] = tuple((x + big_number for x in gd["p"]))
+        total_spending += day_13_prize_cost(gd)
+    return total_spending
+
+
 def day_12_load_map_data() -> [{}]:
     text = Puzzle24(12).get_text_input()
     return {

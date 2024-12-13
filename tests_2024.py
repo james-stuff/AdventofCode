@@ -3,6 +3,40 @@ import library as lib
 import timeit
 
 
+class TestDay13:
+    eg = """Button A: X+94, Y+34
+Button B: X+22, Y+67
+Prize: X=8400, Y=5400
+
+Button A: X+26, Y+66
+Button B: X+67, Y+21
+Prize: X=12748, Y=12176
+
+Button A: X+17, Y+86
+Button B: X+84, Y+37
+Prize: X=7870, Y=6450
+
+Button A: X+69, Y+23
+Button B: X+27, Y+71
+Prize: X=18641, Y=10279"""
+
+    def test_prize_grab(self):
+        assert a.day_13_prize_cost({
+            "a": (94, 34),
+            "b": (22, 67),
+            "p": (8400, 5400),
+        }) == 280
+
+    def test_part_one(self):
+        assert a.day_13_part_one(self.eg) == 480
+        lib.verify_solution(a.day_13_part_one(), 34787)
+
+    def test_part_two(self):
+        solution = a.day_13_part_two()
+        assert solution < 158668878553983
+        lib.verify_solution(solution, part_two=True)
+
+
 class TestDay12:
     def test_part_one(self):
         # print(a.day_12_load_map_data())
