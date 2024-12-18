@@ -3,6 +3,228 @@ import library as lib
 import timeit
 
 
+class TestDay18:
+    eg = """5,4
+4,2
+4,5
+3,0
+2,1
+6,3
+2,4
+1,5
+0,6
+3,3
+2,6
+5,1
+1,2
+5,5
+2,5
+6,5
+1,4
+0,4
+6,4
+1,1
+6,1
+1,0
+0,5
+1,6
+2,0"""
+
+    def test_part_one(self):
+        assert a.day_18_part_one(self.eg) == 22
+        lib.verify_solution(a.day_18_part_one(), 250)
+
+    def test_part_two(self):
+        # assert a.day_18_part_two(self.eg) == "6,1"
+        lib.verify_solution(a.day_18_part_two(), part_two=True)
+
+
+
+class TestDay17:
+    eg = """Register A: 729
+Register B: 0
+Register C: 0
+
+Program: 0,1,5,4,3,0"""
+    p2_eg = """Register A: 2024
+Register B: 0
+Register C: 0
+
+Program: 0,3,5,4,3,0"""
+
+    def test_part_one(self):
+        assert a.day_17_part_one(self.eg) == "4,6,3,5,6,3,5,2,1,0"
+        lib.verify_solution(a.day_17_part_one())
+
+    def test_example_test_cases(self):
+        reg = {"A": 0, "B": 0, "C": 9}
+        prog = [2, 6]
+        a.day_17_execute(reg, prog)
+        assert reg["B"] == 1
+
+        reg["A"] = 10
+        assert a.day_17_execute(reg, [5,0,5,1,5,4]) == "0,1,2"
+
+        reg["A"] = 2024
+        assert a.day_17_execute(reg, [0,1,5,4,3,0]) == "4,2,5,6,7,7,7,7,3,1,0"
+        assert reg["A"] == 0
+
+        reg["B"] = 29
+        a.day_17_execute(reg, [1, 7])
+        assert reg["B"] == 26
+
+        reg["B"] = 2024
+        reg["C"] = 43690
+        a.day_17_execute(reg, [4, 0])
+        assert reg["B"] == 44354
+
+    def test_part_two(self):
+        r, p = a.day_17_load(self.p2_eg)
+        r["A"] = 117440
+        assert a.day_17_execute(r, p) == "0,3,5,4,3,0"
+
+
+class TestDay16:
+    small_eg = """###############
+#.......#....E#
+#.#.###.#.###.#
+#.....#.#...#.#
+#.###.#####.#.#
+#.#.#.......#.#
+#.#.#####.###.#
+#...........#.#
+###.#.#####.#.#
+#...#.....#.#.#
+#.#.#.###.#.#.#
+#.....#...#.#.#
+#.###.#.#.#.#.#
+#S..#.....#...#
+###############"""
+    big_eg = """#################
+#...#...#...#..E#
+#.#.#.#.#.#.#.#.#
+#.#.#.#...#...#.#
+#.#.#.#.###.#.#.#
+#...#.#.#.....#.#
+#.#.#.#.#.#####.#
+#.#...#.#.#.....#
+#.#.#####.#.###.#
+#.#.#.......#...#
+#.#.###.#####.###
+#.#.#...#.....#.#
+#.#.#.#####.###.#
+#.#.#.........#.#
+#.#.#.#########.#
+#S#.............#
+#################"""
+
+    def test_p1_dev(self):
+        m = a.day_16_load_maze(self.small_eg)
+        assert lib.Point(0, 0) not in m
+        assert lib.Point(2, 2) not in m
+        assert lib.Point(12, 1) in m
+        assert len(m) > 20
+        print(f"{len(m)=}")
+        assert a.day_16_start == lib.Point(13, 1)
+        assert a.day_16_end == lib.Point(1, 13)
+
+    def test_part_one(self):
+        assert a.day_16_p1_dijkstra_approach(self.small_eg) == 7036
+        print("Done example 1")
+        assert a.day_16_part_one(self.big_eg) == 11048
+        print("Done example 2")
+        lib.verify_solution(a.day_16_part_one())
+
+
+class TestDay15:
+    small_eg = """########
+#..O.O.#
+##@.O..#
+#...O..#
+#.#.O..#
+#...O..#
+#......#
+########
+
+<^^>>>vv<v>>v<<"""
+    large_eg = """##########
+#..O..O.O#
+#......O.#
+#.OO..O.O#
+#..O@..O.#
+#O#..O...#
+#O..O..O.#
+#.OO.O.OO#
+#....O...#
+##########
+
+<vv>^<v^>v>^vv^v>v<>v^v<v<^vv<<<^><<><>>v<vvv<>^v^>^<<<><<v<<<v^vv^v>^
+vvv<<^>^v^^><<>>><>^<<><^vv^^<>vvv<>><^^v>^>vv<>v<<<<v<^v>^<^^>>>^<v<v
+><>vv>v^v^<>><>>>><^^>vv>v<^^^>>v^v^<^^>v^^>v^<^v>v<>>v^v^<v>v^^<^^vv<
+<<v<^>>^^^^>>>v^<>vvv^><v<<<>^^^vv^<vvv>^>v<^^^^v<>^>vvvv><>>v^<<^^^^^
+^><^><>>><>^^<<^^v>>><^<v>^<vv>>v>>>^v><>^v><<<<v>>v<v<v>vvv>^<><<>^><
+^>><>^v<><^vvv<^^<><v<<<<<><^v<<<><<<^^<v<^^^><^>>^<v^><<<^>>^v<v^v<v^
+>^>>^v>vv>^<<^v<>><<><<v<<v><>v<^vv<<<>^^v^>^^>>><<^v>>v^v><^^>>^<>vv^
+<><^^>^^^<><vvvvv^v<v<<>^v<v>v<<^><<><<><<<^^<<<^<<>><<><^^^>^^<>^>v<>
+^^>vv<^v^v<vv>^<><v<^v>^^^>>>^^vvv^>vvv<>>>^<^>>>>>^<<^v>^vvv<>^<><<v>
+v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^"""
+
+    def test_p1_dev(self):
+        wh = a.day_15_load_warehouse(self.small_eg[:self.small_eg.index("\n\n")])
+        dims = (min(filter(lambda k: wh[k] == "\n", wh)) + 1,
+                  self.small_eg[:self.small_eg.index("\n\n")].count("\n") + 1)
+        expected = {(20, "^"): 11, (20, "<"): 20, (11, ">"): 13}
+        for args, result in expected.items():
+            assert a.day_15_search_in_front(wh, dims, *args) == result
+
+    def test_part_one(self):
+        assert a.day_15_part_one(self.small_eg) == 2028
+        assert a.day_15_part_one(self.large_eg) == 10092
+        lib.verify_solution(a.day_15_part_one(), 1486930)
+
+    def test_part_two(self):
+        assert a.day_15_part_two(self.large_eg) == 9021
+        lib.verify_solution(a.day_15_part_two(), part_two=True)
+
+
+class TestDay14:
+    eg = """p=0,4 v=3,-3
+p=6,3 v=-1,-3
+p=10,3 v=-1,2
+p=2,0 v=2,-1
+p=0,0 v=1,3
+p=3,0 v=-2,-2
+p=7,6 v=-1,-3
+p=3,0 v=-1,-2
+p=9,3 v=2,3
+p=7,3 v=-1,2
+p=2,4 v=2,-3
+p=9,5 v=-3,-3"""
+
+    def test_part_one(self):
+        data = a.day_14_load_data(self.eg)
+        print(data[-2])
+        i, v = data[-2]
+        assert a.day_14_robot_position(
+            i, v, (11, 7), 0) == tuple((2, 4))
+        assert a.day_14_robot_position(
+            i, v, (11, 7), 1) == tuple((4, 1))
+        assert a.day_14_robot_position(
+            i, v, (11, 7), 2) == tuple((6, 5))
+        assert a.day_14_robot_position(
+            i, v, (11, 7), 3) == tuple((8, 2))
+        assert a.day_14_robot_position(
+            i, v, (11, 7), 4) == tuple((10, 6))
+        assert a.day_14_robot_position(
+            i, v, (11, 7), 5) == tuple((1, 3))
+        assert a.day_14_part_one(self.eg) == 12
+        assert a.day_14_part_one() > 223036638
+        lib.verify_solution(a.day_14_part_one(), 224357412)
+
+    def test_part_two(self):
+        lib.verify_solution(a.day_14_part_two(), part_two=True)
+
+
 class TestDay13:
     eg = """Button A: X+94, Y+34
 Button B: X+22, Y+67

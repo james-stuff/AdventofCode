@@ -1,5 +1,4 @@
 import collections
-import copy
 import math
 from main import Puzzle
 import re
@@ -13,6 +12,481 @@ class Puzzle24(Puzzle):
     def get_text_input(self) -> str:
         with open(f'inputs\\2024\\input{self.day}.txt', 'r') as input_file:
             return input_file.read()
+
+
+def day_18_part_one(text: str = "") -> int:
+    walkable = day_18_walkable_points(text)
+    solution, _ = day_18_dijkstra_to_end(walkable)
+    return solution
+
+
+def day_18_dijkstra_to_end(walkable: set, give_path: bool = False) -> int:
+    traceback_walkable = {*walkable}
+
+    origin, destination = (f(walkable) for f in (min, max))
+    distances = {w: 1_000_000_000 for w in walkable}
+    distances[lib.Point(0, 0)] = 0
+    while walkable:
+        closest = min(walkable, key=lambda wp: distances[wp])
+        for neighbour in day_18_neighbours(closest, walkable):
+            ngb_distance = distances[closest] + 1
+            if ngb_distance < distances[neighbour]:
+                distances[neighbour] = ngb_distance
+        walkable.remove(closest)
+
+    if give_path and distances[destination] < 1_000_000_000:
+        tip = destination
+        path = []
+        while tip != origin:
+            previous = [
+                *filter(lambda ng: distances[ng] == distances[tip] - 1,
+                        day_18_neighbours(tip, traceback_walkable))
+            ][0]
+            path.append(previous)
+            tip = previous
+        # print(f"Found path: {path[::-1]}\n of length: {len(path)}")
+        return distances[destination], path
+    return distances[destination], []
+
+
+def day_18_neighbours(point: lib.Point, available: set) -> [lib.Point]:
+    return [
+        mv(point)
+        for mv in pm23.values()
+        if mv(point) in available
+    ]
+
+
+def day_18_walkable_points(text: str = "") -> set:
+    grid_size, n_first_to_fall = 7, 12
+    if not text:
+        text = Puzzle24(18).get_text_input()
+        grid_size, n_first_to_fall = 71, 1024
+    blocked = {
+        lib.Point(*(int(n) for n in m.group().split(",")))
+        for m in [*re.finditer(r"\d+,\d+", text)][:n_first_to_fall]
+    }
+    return {
+        lib.Point(x, y)
+        for x, y in itertools.product(range(grid_size), repeat=2)
+    } - blocked
+
+
+def day_18_part_two(text: str = "") -> str:
+    """Get the Dijkstra method to record each step
+        on the shortest path.
+        Add further bytes until one of them lands on this path
+        Recalculate Dijkstra
+        Repeat until there is no way to get there"""
+    n_fallen = 12 if text else 1024
+    if not text:
+        text = Puzzle24(18).get_text_input()
+    walkable = day_18_walkable_points()
+    _, optimal_path = day_18_dijkstra_to_end(
+        {*walkable}, give_path=True
+    )
+    text = "\n".join(text.split("\n")[n_fallen:])
+    iterator = re.finditer(r"\d+,\d+", text)
+    while True:
+        to_drop = lib.Point(
+            *(int(n) for n in next(iterator).group().split(","))
+        )
+        walkable.remove(to_drop)
+        if to_drop in optimal_path:
+            distance, optimal_path = day_18_dijkstra_to_end(
+                {*walkable}, True
+            )
+            if distance > 71 ** 2:
+                return ",".join(f"{c}" for c in to_drop)
+    return "0,0"
+
+
+def day_17_part_one(text: str = "") -> str:
+    return day_17_execute(*day_17_load(text))
+
+
+def day_17_load(text: str = "") -> (str,):
+    if not text:
+        text = Puzzle24(17).get_text_input()
+    reg = {
+        m.group()[0]: int(m.group()[3:])
+        for m in re.finditer(r"[ABC]: \d+", text)
+    }
+    program = [
+        int(n) for n in
+        re.search(r"(\d,)+\d", text).group().split(",")
+    ]
+    return reg, program
+
+
+def day_17_execute(register: {}, program: [int]) -> str:
+    p_len = len(program)
+    pointer = 0
+    output = []
+    while pointer < p_len:
+        p_increment = 2
+        opcode, operand = program[pointer:pointer + 2]
+        match opcode:
+            case 0:     # adv
+                operand = day_17_combo_op(register, operand)
+                register["A"] = register["A"] // (2 ** operand)
+            case 1:     # bxl
+                register["B"] = register["B"] ^ operand
+            case 2:     # bst
+                register["B"] = day_17_combo_op(register, operand) % 8
+            case 3:     # jnz
+                if register["A"] != 0:
+                    pointer = operand
+                    p_increment = 0
+                    # what if the operand == 0?  Does that mean
+                    # it doesn't "jump" so need to keep p_increment = 2?
+            case 4:     # bxc
+                register["B"] = register["B"] ^ register["C"]
+            case 5:     # out
+                output.append(f"{day_17_combo_op(register, operand) % 8}")
+            case 6:     # bdv
+                operand = day_17_combo_op(register, operand)
+                register["B"] = register["A"] // (2 ** operand)
+            case 7:     # cdv
+                operand = day_17_combo_op(register, operand)
+                register["C"] = register["A"] // (2 ** operand)
+        pointer += p_increment
+    return ",".join(output)
+
+
+def day_17_combo_op(register: {}, raw_operand: int) -> int:
+    if raw_operand > 3:
+        assert raw_operand != 7
+        return register[chr(65 + raw_operand - 4)]
+    return raw_operand
+
+
+day_16_start, day_16_end = (lib.Point(0, 0) for _ in range(2))
+
+
+def day_16_p1_dijkstra_approach(text: str = "") -> int:
+    maze = day_16_load_maze(text)
+    junctions = {
+        *filter(
+            lambda pt: len(day_16_walkable_neighbours(pt, maze)) > 2,
+            maze)
+    }
+    junctions.update([day_16_start, day_16_end])
+    walks = day_16_build_walks_table(junctions, maze)
+    junctions = {
+        tuple((junc, facing))
+        for junc in junctions
+        for facing in (False, True)
+    }
+    # junctions is now (junction, arriving at that junction
+    #                               vertically or not)
+    # a junction's neighbours are other junction/facings that
+    #   can be reached using a walk in the table
+    #   includes the ninety-degree rotated version of itself
+    j_dist = {jf: 1_000_000_000 for jf in junctions}
+    j_dist[(day_16_start, False)] = 0
+    while junctions:
+        closest = min(junctions, key=lambda wp: j_dist[wp])
+        neighbours = [
+            *filter(
+                lambda w:
+                w[0] in day_16_walkable_neighbours(closest[0], maze),
+                walks
+            )
+        ]
+        for neighbour in neighbours:
+            ngb_distance = j_dist[closest] + neighbour[2]
+            vert = closest[0].y == neighbour[0].y
+            ngb_distance += 1 if vert == closest[1] else 1_000
+            if ngb_distance < j_dist[(neighbour[1], neighbour[3])]:
+                j_dist[(neighbour[1], neighbour[3])] = ngb_distance
+        junctions.remove(closest)
+    return j_dist[day_16_end]
+
+
+
+
+def day_16_part_one(text: str = "") -> int:
+    maze = day_16_load_maze(text)
+    junctions = {
+        *filter(
+            lambda pt: len(day_16_walkable_neighbours(pt, maze)) > 2,
+            maze)
+    }
+    junctions.update([day_16_start, day_16_end])
+
+    # adjacent_junctions = {
+    #     j for j in junctions
+    #     if any(lib.manhattan_distance(j, j1) == 1 for j1 in junctions - {j})
+    # }
+    # print(f"{adjacent_junctions=}")
+
+    walks = day_16_build_walks_table(junctions, maze)
+
+    seen = set()
+
+    lowest_cost = 1_000_000_000
+    route_queue = [[(day_16_start, day_16_start, 0, False)]]
+    while route_queue:
+        if len(route_queue) % 50 == 0:
+            print(f"{len(route_queue)=}")
+        if len(route_queue) > 256:
+            route_queue = sorted(route_queue, key=lambda r: day_16_score_route(r, maze))[:64]
+        route = route_queue.pop()
+        if day_16_score_route(route, maze) > lowest_cost:
+            continue
+        walk_start, junction, _, facing_up = route[-1]
+        # if junction == lib.Point(77, 61):
+        #     print("yoohoo!")
+        if walk_start not in seen:
+            seen.add(walk_start)
+            # print(f"New walk from: {walk_start}")
+        if junction == day_16_end:
+            route_score = day_16_score_route(route, maze)
+            if route_score < lowest_cost:
+                print(f"{len(route_queue)=}")
+                lowest_cost = route_score
+        else:
+            available_next = [
+                *filter(
+                    lambda w:
+                    w[0] in day_16_walkable_neighbours(junction, maze) and
+                    not any(wlk[0] == w[0] for wlk in route),
+                    walks
+                )
+            ]
+            route_queue.extend([
+                route + [an]
+                for an in available_next
+                if an[1] != junction
+            ]
+            )
+    return lowest_cost
+
+
+def day_16_score_route(route: [(int,)], maze: {}) -> int:
+    if len(day_16_walkable_neighbours(route[-1][1], maze)) > 1:
+        score = sum(st[2] for st in route)
+        for i, step in enumerate(route[:-1]):
+            _, j, _, going_up = step
+            if (route[i + 1][0].y == j.y) != going_up:
+                score += 1_000
+            score += 1
+        return score
+    return 1_000_000_000
+
+
+def day_16_build_walks_table(junctions: set, maze: dict) -> {()}:
+    walks = set()
+    for j in junctions:
+        for ngb in day_16_walkable_neighbours(j, maze):
+            cost = 0
+            moving_vertically = ngb.y == j.y
+            walk = [ngb]
+            while True:
+                next_available = [
+                    *filter(lambda p: p not in walk and p != j,
+                            day_16_walkable_neighbours(walk[-1], maze))
+                            ]
+                if not next_available:
+                    break
+                walk.append(next_available[0])
+                cost += 1
+                vert = walk[-1].y == walk[-2].y
+                if vert != moving_vertically:
+                    moving_vertically = vert
+                    cost += 1_000
+                if walk[-1] in junctions:
+                    break
+            walks.add((ngb, walk[-1], cost, moving_vertically))
+    return walks
+
+
+def day_16_walkable_neighbours(point: lib.Point, maze: {}) -> [lib.Point]:
+    return [
+        mv(point) for mv in pm23.values()
+        if mv(point) in maze
+    ]
+
+
+def day_16_load_maze(text: str = "") -> {}:
+    global day_16_start, day_16_end
+    if not text:
+        text = Puzzle24(16).get_text_input().strip("\n")
+    walkable = []
+    for y, row in enumerate(text.split("\n")):
+        for x, char in enumerate(row):
+            if char in ".SE":
+                walkable.append(lib.Point(y, x))
+                if char == "S":
+                    day_16_start = lib.Point(y, x)
+                if char == "E":
+                    day_16_end = lib.Point(y, x)
+    return frozenset(walkable)
+
+
+def day_15_part_one(text: str = "") -> int:
+    if not text:
+        text = Puzzle24(15).get_text_input().strip("\n")
+    layout, directions = text.split("\n\n")
+    warehouse = day_15_load_warehouse(layout)
+    dimensions = (min(filter(lambda k: warehouse[k] == "\n", warehouse)) + 1,
+                  layout.count("\n") + 1)
+    robot_pos = [*filter(lambda k: warehouse[k] == "@", warehouse)][0]
+    warehouse[robot_pos] = "."
+    for move in directions:
+        if move == "\n":
+            continue
+        empty = day_15_search_in_front(
+            warehouse, dimensions, robot_pos, move)
+        if empty != robot_pos:
+            pos_in_front = day_15_search_in_front(
+                warehouse, dimensions, robot_pos, move, True
+            )
+            if empty != pos_in_front:
+                warehouse[pos_in_front] = "."
+                warehouse[empty] = "O"
+            robot_pos = pos_in_front
+        # print("".join(warehouse.values()))
+    return day_15_gps_score(warehouse, dimensions[0])
+
+
+def day_15_gps_score(wh: {}, wh_width: int) -> int:
+    o_positions = [*filter(lambda k: wh[k] == "O", wh)]
+    return sum(
+        (100 * (p // wh_width)) + (p % wh_width)
+        for p in o_positions
+    )
+
+
+def day_15_search_in_front(warehouse: {}, dims: (int,),
+                           initial_pos: int, direction: str,
+                           immediate_neighbour: bool = False) -> int:
+    wh_width, wh_height = dims
+    wh_key_steps = {"^": -wh_width, ">": 1, "v": wh_width, "<": -1}
+    line_step = wh_key_steps[direction]
+    me = initial_pos
+    while me + line_step in warehouse:
+        me += line_step
+        if immediate_neighbour:
+            return me
+        if warehouse[me] == ".":
+            return me
+    return initial_pos
+
+
+def day_15_load_warehouse(text: str) -> {}:
+    return {
+        i: ch
+        for i, ch in enumerate(text)
+        if ch != "#"
+    }
+
+
+def day_15_part_two(text: str = "") -> int:
+    return 0
+
+
+def day_14_part_two() -> int:
+    """Assume that a Christmas tree will contain many pairs of
+        points distributed symmetrically about the vertical axis"""
+    robots = day_14_load_data(Puzzle24(14).get_text_input().strip("\n"))
+    grid_w_x_h = 101, 103
+    positions, velocities = ([t[ind] for t in robots] for ind in range(2))
+    for time in range(1_000_000):
+        positions = [
+            day_14_robot_position(pos, vel, grid_w_x_h, iterations=1)
+            for pos, vel in zip(positions, velocities)
+        ]
+        if day_14_looks_like_a_christmas_tree(positions, grid_w_x_h):
+            day_14_display_grid(positions, grid_w_x_h)
+            return time
+        # took 26 mins to do a million iterations and still no Christmas tree :(
+    return 0
+
+
+def day_14_looks_like_a_christmas_tree(
+        robot_positions: [(int,)], grid_dims: (int,)) -> bool:
+    left, right = (
+        {*day_14_halve_grid(
+            robot_positions, bool(ft),
+            across_middle=False, grid_dims=grid_dims
+        )}
+        for ft in range(2)
+    )
+    centre = grid_dims[0] // 2
+    symmetrical = [
+        *filter(lambda pt: ((2 * centre) - pt[0], pt[1]) in right, left)
+    ]
+    # print(f"{len(symmetrical)=}")
+    if len(symmetrical) > 0.6 * len(left):
+        return True
+    return False
+
+
+def day_14_display_grid(robot_positions: [(int,)], grid_dims: (int,)):
+    w, h = grid_dims
+    for line in range(h):
+        print("".join(
+            "#" if tuple((x, line)) in robot_positions else "."
+            for x in range(w)
+        ))
+
+
+def day_14_part_one(text: str = "") -> int:
+    grid_w_x_h = 11, 7
+    if not text:
+        text = Puzzle24(14).get_text_input().strip("\n")
+        grid_w_x_h = 101, 103
+    robot_p_v_tuples = day_14_load_data(text)
+    final_positions = [
+        day_14_robot_position(*pvt, grid_w_x_h)
+        for pvt in robot_p_v_tuples
+    ]
+
+    quadrant_scores = [
+        len(
+            day_14_halve_grid(
+                day_14_halve_grid(
+                    final_positions, first, False, grid_w_x_h),
+                second, True, grid_w_x_h)
+        )
+        for first, second in itertools.product([True, False], repeat=2)
+    ]
+    return math.prod(quadrant_scores)
+
+
+def day_14_halve_grid(
+        points: [(int,)], upper_half: bool,
+        across_middle: bool, grid_dims: (int,)) -> [(int,)]:
+    side_length = grid_dims[across_middle]
+    floor = (side_length // 2) + 1 if upper_half else 0
+    ceiling = floor + (side_length // 2)
+    return [
+        pt for pt in points
+        if floor <= pt[across_middle] < ceiling
+    ]
+
+
+def day_14_robot_position(
+        original: (int,), velocity: (int,),
+        grid_dimensions: (int,), iterations: int = 100) -> (int,):
+    return tuple((
+        (p + (iterations * v)) % d
+        for p, v, d in zip(original, velocity, grid_dimensions)
+    ))
+
+
+def day_14_load_data(text: str) -> [((int,),)]:
+    re_num = r"-?\d+"
+    return [
+        tuple(
+            tuple((int(nm.group())
+                   for nm in re.finditer(re_num, m.group())))
+            for m in re.finditer(f"[p|v]={re_num},{re_num}", line)
+        )
+        for line in text.split("\n")
+    ]
 
 
 def day_13_part_one(text: str = "") -> int:
@@ -47,7 +521,7 @@ def day_13_prize_cost(gd: {}) -> int:
         return 0
     bb = ((gd["p"][0] * gd["a"][1]) - (gd["p"][1] * gd["a"][0])) / ((gd["b"][0] * gd["a"][1]) - (gd["b"][1] * gd["a"][0]))
     aa = (gd["p"][1] - (bb * gd["b"][1])) / gd["a"][1]
-    if all(math.isclose(n, int(n)) for n in (aa, bb)):
+    if all(math.isclose(n, int(n), rel_tol=0, abs_tol=0.001) for n in (aa, bb)):
         return (3 * int(aa)) + int(bb)
     return 0
 
