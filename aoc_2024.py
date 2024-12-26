@@ -14,6 +14,109 @@ class Puzzle24(Puzzle):
             return input_file.read()
 
 
+day_19_known_possible = set()
+
+
+def day_19_part_one(text: str = "") -> int:
+    components, desired = day_19_load(text)
+    all_letters = set(char for c in components for char in c)
+    print(f"{all_letters=}")
+    single_letters = {comp for comp in components if len(comp) == 1}
+    print(f"{single_letters=}")
+    first_pass = [
+        *filter(
+            lambda des:
+            day_19_can_make(des, components, single_letters, all_letters),
+            desired
+        )
+    ]
+    # return sum(day_19_recursive_can_make(des, components)#, single_letters, all_letters)
+    #            for des in desired)
+    total, seen = 0, 0
+    # ["urwgbugrbguuuwuwwbggbwruubgbbubgrgrwruubrwrugbbbbgwbg"]
+    for des in first_pass:
+        if seen == 43:
+            print(f"{des=}")
+        total += day_19_recursive_can_make(des, components.union(day_19_known_possible))
+        seen += 1
+        print(f"{total} of {seen} possible to make")
+        print(f"\tSize of known possibles: {len(day_19_known_possible)}")
+    return total
+
+
+def day_19_load(text: str = "") -> (set,):
+    global day_19_known_possible
+    day_19_known_possible = set()
+    if not text:
+        text = Puzzle24(19).get_text_input().strip("\n")
+    c, _, d = text.partition("\n\n")
+    components = {*c.split(", ")}
+    desired = d.split("\n")
+    return components, desired
+
+
+def day_19_can_make(
+        desired_pattern: str, available: {str},
+        single_letters: set, all_letters: set
+) -> bool:
+    for ch in all_letters - single_letters:
+        ch_pos = day_19_all_indices(ch, desired_pattern)
+        allowable = []
+        for av in filter(lambda avl: ch in avl, available):
+            allowable.extend(
+                [
+                    mm.start() + ind
+                    for mm in re.finditer(av, desired_pattern)
+                    for ind in day_19_all_indices(ch, av)
+                ]
+            )
+        if any(cp not in allowable for cp in ch_pos):
+            return False
+
+        # found_ranges = []
+        # for av_pattern in filter(lambda av: ch in av, available):
+        #     found_ranges.extend([
+        #         (mm.start(), mm.end())
+        #         for mm in re.finditer(av_pattern, desired_pattern)
+        #     ])
+        # if any(
+        #         all(cp not in range(*r) for r in found_ranges)
+        #         for cp in ch_pos
+        # ):
+        #     return False
+    return True
+
+
+def day_19_recursive_can_make(
+        desired_pattern: str, available: {str},
+) -> bool:
+    global day_19_known_possible
+    # if len(day_19_known_possible) > 633:
+    #     print(f"\t{desired_pattern}")
+    if desired_pattern in available:
+        return True
+    first_fragments = [
+        *filter(lambda a: desired_pattern.startswith(a),
+                sorted(available, key=lambda av: len(av), reverse=True))
+    ]
+    possible = any(
+        day_19_recursive_can_make(
+            desired_pattern[len(ff):],
+            sorted(available, key=lambda av: len(av), reverse=True)
+        )
+        for ff in first_fragments
+    )
+    if possible:
+        day_19_known_possible.add(desired_pattern)
+        if len(day_19_known_possible) > 633:
+            print(f"\tNew possibility: {desired_pattern}")
+    return possible
+
+
+def day_19_all_indices(character: str, string: str) -> [int]:
+    return [m.start() for m in re.finditer(f"{character}", string)]
+
+
 def day_18_part_one(text: str = "") -> int:
     walkable = day_18_walkable_points(text)
     solution, _ = day_18_dijkstra_to_end(walkable)
@@ -162,9 +265,38 @@ def day_17_combo_op(register: {}, raw_operand: int) -> int:
 
 
 day_16_start, day_16_end = (lib.Point(0, 0) for _ in range(2))
+day_16_distances_table, day_16_walks_table = ({} for _ in range(2))
+day_16_walks_taken = set()
 
 
-def day_16_p1_dijkstra_approach(text: str = "") -> int:
+def day_16_part_one(text: str = "") -> int:
+    day_16_set_up(text)
+    return min(
+        day_16_distances_table[(day_16_end, fc)]
+        for fc in (True, False)
+    )
+
+
+def day_16_part_two(text: str = "") -> int:
+    global day_16_distances_table, day_16_walks_table, day_16_walks_taken
+    day_16_walks_taken = set()
+    day_16_set_up(text)
+
+    dist_min = min(
+        day_16_distances_table[(day_16_end, fc)]
+        for fc in (True, False)
+    )
+    optimal_end = [(day_16_end, ff)
+                   for ff in (False, True)
+                   if day_16_distances_table[(day_16_end, ff)] == dist_min]
+    print(day_16_backtrack_route([optimal_end[0]]))
+    print(f"{day_16_walks_taken=}")
+    return (sum(wt[2] % 100 for wt in day_16_walks_taken) +
+            len(day_16_walks_taken) + 1)
+
+
+def day_16_set_up(text: str = ""):
+    global day_16_distances_table, day_16_walks_table
     maze = day_16_load_maze(text)
     junctions = {
         *filter(
@@ -172,108 +304,90 @@ def day_16_p1_dijkstra_approach(text: str = "") -> int:
             maze)
     }
     junctions.update([day_16_start, day_16_end])
-    walks = day_16_build_walks_table(junctions, maze)
-    junctions = {
+    day_16_walks_table = day_16_build_walks_table(junctions, maze)
+    # jf_pairs is (junction, <arriving at that junction vertically>).
+    # A junction's neighbours are other junction/facing pairs that
+    #   can be reached using a walk in the table
+    jf_pairs = {
         tuple((junc, facing))
         for junc in junctions
         for facing in (False, True)
     }
-    # junctions is now (junction, arriving at that junction
-    #                               vertically or not)
-    # a junction's neighbours are other junction/facings that
-    #   can be reached using a walk in the table
-    #   includes the ninety-degree rotated version of itself
+    day_16_distances_table = day_16_dijkstra_distances(
+        maze, jf_pairs, day_16_walks_table
+    )
+
+
+def day_16_backtrack_route(route: []) -> [[]]:
+    global day_16_walks_taken
+    if day_16_distances_table[route[-1]] == 0:
+        return [route]
+    backward_neighbours = [
+        *filter(
+            lambda k: any(lib.manhattan_distance(w[0], k[0]) == 1
+                          and w[1] == route[-1][0]
+                          for w in day_16_walks_table)
+                      and k[0] != route[-1][0]
+            ,
+            day_16_distances_table.keys()
+        )
+    ]
+    shortest_ngb_dist = min(
+        day_16_distances_table[ngb]
+        for ngb in backward_neighbours
+    )
+    # print(f"{shortest_ngb_dist=}")
+    neighbours_visited = [
+        nnn for nnn in backward_neighbours
+        if day_16_distances_table[nnn] == shortest_ngb_dist
+    ]
+    walks_used = [
+        [w for w in day_16_walks_table
+         if lib.manhattan_distance(nv[0], w[0]) == 1
+         and w[1] == route[-1][0]][0]
+        for nv in neighbours_visited
+    ]
+    new_routes = [
+        route + [nnv]
+        for nnv in neighbours_visited
+    ]
+    day_16_walks_taken.update(walks_used)
+    return [btr for rt in new_routes for btr in day_16_backtrack_route(rt)]
+
+
+def day_16_dijkstra_distances(maze: set, junctions: set, walks: {()}) -> {}:
+    if len(day_16_distances_table):
+        return day_16_distances_table
     j_dist = {jf: 1_000_000_000 for jf in junctions}
     j_dist[(day_16_start, False)] = 0
     while junctions:
         closest = min(junctions, key=lambda wp: j_dist[wp])
-        neighbours = [
+        neighbour_walks = [
             *filter(
                 lambda w:
-                w[0] in day_16_walkable_neighbours(closest[0], maze),
+                w[0] in day_16_walkable_neighbours(closest[0], maze)
+                and (w[1], w[3]) in junctions,
                 walks
             )
         ]
-        for neighbour in neighbours:
-            ngb_distance = j_dist[closest] + neighbour[2]
-            vert = closest[0].y == neighbour[0].y
-            ngb_distance += 1 if vert == closest[1] else 1_000
-            if ngb_distance < j_dist[(neighbour[1], neighbour[3])]:
-                j_dist[(neighbour[1], neighbour[3])] = ngb_distance
+        for nw in neighbour_walks:
+            ngb_distance = j_dist[closest] + nw[2]
+            vert = closest[0].y == nw[0].y
+            ngb_distance += 1
+            if vert != closest[1]:
+                ngb_distance += 1_000
+            if ngb_distance < j_dist[(nw[1], nw[3])]:
+                j_dist[(nw[1], nw[3])] = ngb_distance
         junctions.remove(closest)
-    return j_dist[day_16_end]
 
+    # t_dict = ""
+    # for k, v in j_dist.items():
+    #     loc, facing = k
+    #     t_dict += ",".join([f"{tuple(loc)}"] + [f"{facing}"] + [f"{v}"]) + "\n"
+    # with open("day_16.csv", "w") as file:
+    #     file.write(t_dict)
 
-
-
-def day_16_part_one(text: str = "") -> int:
-    maze = day_16_load_maze(text)
-    junctions = {
-        *filter(
-            lambda pt: len(day_16_walkable_neighbours(pt, maze)) > 2,
-            maze)
-    }
-    junctions.update([day_16_start, day_16_end])
-
-    # adjacent_junctions = {
-    #     j for j in junctions
-    #     if any(lib.manhattan_distance(j, j1) == 1 for j1 in junctions - {j})
-    # }
-    # print(f"{adjacent_junctions=}")
-
-    walks = day_16_build_walks_table(junctions, maze)
-
-    seen = set()
-
-    lowest_cost = 1_000_000_000
-    route_queue = [[(day_16_start, day_16_start, 0, False)]]
-    while route_queue:
-        if len(route_queue) % 50 == 0:
-            print(f"{len(route_queue)=}")
-        if len(route_queue) > 256:
-            route_queue = sorted(route_queue, key=lambda r: day_16_score_route(r, maze))[:64]
-        route = route_queue.pop()
-        if day_16_score_route(route, maze) > lowest_cost:
-            continue
-        walk_start, junction, _, facing_up = route[-1]
-        # if junction == lib.Point(77, 61):
-        #     print("yoohoo!")
-        if walk_start not in seen:
-            seen.add(walk_start)
-            # print(f"New walk from: {walk_start}")
-        if junction == day_16_end:
-            route_score = day_16_score_route(route, maze)
-            if route_score < lowest_cost:
-                print(f"{len(route_queue)=}")
-                lowest_cost = route_score
-        else:
-            available_next = [
-                *filter(
-                    lambda w:
-                    w[0] in day_16_walkable_neighbours(junction, maze) and
-                    not any(wlk[0] == w[0] for wlk in route),
-                    walks
-                )
-            ]
-            route_queue.extend([
-                route + [an]
-                for an in available_next
-                if an[1] != junction
-            ]
-            )
-    return lowest_cost
-
-
-def day_16_score_route(route: [(int,)], maze: {}) -> int:
-    if len(day_16_walkable_neighbours(route[-1][1], maze)) > 1:
-        score = sum(st[2] for st in route)
-        for i, step in enumerate(route[:-1]):
-            _, j, _, going_up = step
-            if (route[i + 1][0].y == j.y) != going_up:
-                score += 1_000
-            score += 1
-        return score
-    return 1_000_000_000
+    return j_dist
 
 
 def day_16_build_walks_table(junctions: set, maze: dict) -> {()}:
@@ -337,31 +451,30 @@ def day_15_part_one(text: str = "") -> int:
     for move in directions:
         if move == "\n":
             continue
-        empty = day_15_search_in_front(
+        empty = day_15_look_ahead(
             warehouse, dimensions, robot_pos, move)
         if empty != robot_pos:
-            pos_in_front = day_15_search_in_front(
+            pos_in_front = day_15_look_ahead(
                 warehouse, dimensions, robot_pos, move, True
             )
             if empty != pos_in_front:
                 warehouse[pos_in_front] = "."
                 warehouse[empty] = "O"
             robot_pos = pos_in_front
-        # print("".join(warehouse.values()))
     return day_15_gps_score(warehouse, dimensions[0])
 
 
 def day_15_gps_score(wh: {}, wh_width: int) -> int:
-    o_positions = [*filter(lambda k: wh[k] == "O", wh)]
+    o_positions = [*filter(lambda k: wh[k] in "O[", wh)]
     return sum(
         (100 * (p // wh_width)) + (p % wh_width)
         for p in o_positions
     )
 
 
-def day_15_search_in_front(warehouse: {}, dims: (int,),
-                           initial_pos: int, direction: str,
-                           immediate_neighbour: bool = False) -> int:
+def day_15_look_ahead(warehouse: {}, dims: (int,),
+                      initial_pos: int, direction: str,
+                      immediate_neighbour: bool = False) -> int:
     wh_width, wh_height = dims
     wh_key_steps = {"^": -wh_width, ">": 1, "v": wh_width, "<": -1}
     line_step = wh_key_steps[direction]
@@ -375,6 +488,32 @@ def day_15_search_in_front(warehouse: {}, dims: (int,),
     return initial_pos
 
 
+def day_15_p2_widen_warehouse(warehouse: {}) -> {}:
+    wide = {}
+    for loc in warehouse:
+        doubled = (loc * 2) - len(
+            [*filter(lambda i: i[0] < loc and i[1] == "\n", warehouse.items())]
+        )
+        match warehouse[loc]:
+            case "O":
+                wide[doubled] = "["
+                wide[doubled + 1] = "]"
+            case "\n":
+                wide[doubled] = "\n"
+            case "@":
+                wide[doubled] = "@"
+                wide[doubled + 1] = "."
+            case _:
+                wide[doubled] = wide[doubled + 1] = warehouse[loc]
+    return wide
+
+
+def day_15_p2_vertical_look_ahead(
+        warehouse: {}, dims: (int,), initial_pos: int, direction: str,
+        immediate_neighbour: bool = False) -> int:
+    return 0
+
+
 def day_15_load_warehouse(text: str) -> {}:
     return {
         i: ch
@@ -383,8 +522,92 @@ def day_15_load_warehouse(text: str) -> {}:
     }
 
 
-def day_15_part_two(text: str = "") -> int:
-    return 0
+def day_15_part_two(text: str = "", start_pos: int = 0) -> int:
+    if not text:
+        text = Puzzle24(15).get_text_input().strip("\n")
+    layout, directions = text.split("\n\n")
+    warehouse = day_15_p2_widen_warehouse(
+        day_15_load_warehouse(layout)
+    )
+    dimensions = (min(filter(lambda k: warehouse[k] == "\n", warehouse)) + 1,
+                  layout.count("\n") + 1)
+    robot_pos = [*filter(lambda k: warehouse[k] == "@", warehouse)][0]
+    warehouse[robot_pos] = "."
+    if start_pos:
+        robot_pos = start_pos
+    for move in directions:
+        match move:
+            case "\n":
+                pass
+            case move if move in "<>":
+                empty = day_15_look_ahead(
+                    warehouse, dimensions, robot_pos, move)
+                if empty != robot_pos:
+                    pos_in_front = day_15_look_ahead(
+                        warehouse, dimensions, robot_pos, move, True
+                    )
+                    if pos_in_front > empty:
+                        for p in range(empty, pos_in_front):
+                            warehouse[p] = warehouse[p + 1]
+                    elif pos_in_front < empty:
+                        for p in range(empty, pos_in_front, -1):
+                            warehouse[p] = warehouse[p - 1]
+                    robot_pos = pos_in_front
+                    warehouse[pos_in_front] = "."
+            case _:
+                """check if there's a blockage above or below
+                    Scenarios:
+                        - there is a blockage and robot cannot move
+                        - there is empty space immediately ahead 
+                            so robot moves forward
+                        - there is a wall immediately ahead so 
+                            nothing happens
+                        - one or more blocks get pushed ahead 
+                            because they can all move forward by one"""
+                pos_in_front = day_15_look_ahead(
+                    warehouse, dimensions, robot_pos, move, True
+                )
+                if warehouse[pos_in_front] == ".":
+                    robot_pos = pos_in_front
+                elif warehouse[pos_in_front] in "[]":
+                    """ write a function that returns a list of blocks
+                        that will move.  If it returns empty, do nothing.
+                        Otherwise, move them all and advance robot_pos"""
+                    blocks_to_move = day_15_moveable_blocks(
+                        pos_in_front, warehouse, dimensions, move)
+                    if -1 not in blocks_to_move:
+                        distance = dimensions[0] * (1 if move == "v" else -1)
+                        for bl in sorted(
+                                set(blocks_to_move),
+                                reverse=move == "v"
+                        ):
+                            warehouse[bl + distance] = "["
+                            warehouse[bl + distance + 1] = "]"
+                            warehouse[bl] = warehouse[bl + 1] = "."
+                        robot_pos = pos_in_front
+    return day_15_gps_score(warehouse, dimensions[0])
+
+
+def day_15_moveable_blocks(
+        b_pos: int, wh: {}, dims: (int,), dirn: str) -> [int]:
+    """list the left edge positions of each block that can move forward"""
+    if wh[b_pos] == "]":
+        b_pos -= 1
+    to_next_row = (1 if dirn == "v" else -1) * dims[0]
+    above_left = b_pos + to_next_row
+    if all(
+            above_left + o in wh and wh[above_left + o] == "."
+            for o in range(2)
+    ):
+        return [b_pos]
+    elif any(above_left + p not in wh for p in range(2)):
+        return [-1]
+    return [b_pos] + [
+        bl
+        for q in range(2)
+        for bl in day_15_moveable_blocks(above_left + q, wh, dims, dirn)
+        if wh[above_left + q] in "[]"
+    ]
 
 
 def day_14_part_two() -> int:

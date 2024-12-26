@@ -1,6 +1,35 @@
+import re
 import aoc_2024 as a
 import library as lib
 import timeit
+
+
+class TestDay19:
+    eg = """r, wr, b, g, bwu, rb, gb, br
+
+brwrr
+bggr
+gbbr
+rrbgbr
+ubwu
+bwurrg
+brgr
+bbrgwb"""
+
+    def test_part_one(self):
+        assert a.day_19_part_one(self.eg) == 6
+        a.day_19_known_possible = set()
+        solution = a.day_19_part_one()
+        assert solution < 304
+        lib.verify_solution(solution)
+
+    def test_p1_investigation(self):
+        dodgy = "urwgbugrbguuuwuwwbggbwruubgbbubgrgrwruubrwrugbbbbgwbg"
+        for reverse_index in range(-1, (1 - len(dodgy)), -1):
+            desired = dodgy[reverse_index:]
+            c, _ = a.day_19_load()
+            print(f"{desired} -> "
+                  f"{a.day_19_recursive_can_make(desired, c)}")
 
 
 class TestDay18:
@@ -36,8 +65,7 @@ class TestDay18:
 
     def test_part_two(self):
         # assert a.day_18_part_two(self.eg) == "6,1"
-        lib.verify_solution(a.day_18_part_two(), part_two=True)
-
+        lib.verify_solution(a.day_18_part_two(), "56,8", part_two=True)
 
 
 class TestDay17:
@@ -129,11 +157,58 @@ class TestDay16:
         assert a.day_16_end == lib.Point(1, 13)
 
     def test_part_one(self):
-        assert a.day_16_p1_dijkstra_approach(self.small_eg) == 7036
-        print("Done example 1")
+        assert a.day_16_part_one(self.small_eg) == 7036
+        a.day_16_distances_table = {}
         assert a.day_16_part_one(self.big_eg) == 11048
-        print("Done example 2")
-        lib.verify_solution(a.day_16_part_one())
+        a.day_16_distances_table = {}
+        lib.verify_solution(a.day_16_part_one(), 115500)
+
+    def test_part_two(self):
+        # with open("day_16.csv") as csv_file:
+        #     csv_text = csv_file.read()
+        # a.day_16_distances_table = {}
+        # for row in csv_text.split("\n"):
+        #     if not row:
+        #         break
+        #     point = lib.Point(*tuple(
+        #         int(m.group().strip(",)"))
+        #         for m in [*re.finditer(r"\d+\)?,", row)]
+        #     ))
+        #     facing_up = re.search(r"[TF]", row).group() == "T"
+        #     key = point, facing_up
+        #     value = int(re.search(r"e,\d+", row).group()[2:])
+        #     a.day_16_distances_table[key] = value
+        # maze = a.day_16_load_maze()
+        # junctions = {
+        #     *filter(
+        #         lambda pt: len(a.day_16_walkable_neighbours(pt, maze)) > 2,
+        #         maze)
+        # }
+        # junctions.update([a.day_16_start, a.day_16_end])
+        # a.day_16_walks_table = a.day_16_build_walks_table(junctions, maze)
+        # a.day_16_start, a.day_16_end = lib.Point(139, 1), lib.Point(1, 139)
+        # a.day_16_distances_table = {}
+        # assert a.day_16_part_two(self.small_eg) == 45
+        # a.day_16_distances_table = {}
+        # TODO: fails here.  Looks like it's failing to
+        #   spot the upper of the two possible best paths
+        # TODO: find the longest walk when constructing walk table
+        #   In distances table:
+        #       (Point(x=9, y=9), False): 8034
+        #       (Point(x=11, y=11), True): 7034
+        assert a.day_16_part_two(self.big_eg) == 64
+        solution = a.day_16_part_two()
+        # this took 06:23 minutes
+        assert solution > 545
+        """That's not the right answer; your answer is too low. 
+            Curiously, it's the right answer for someone else; 
+            you might be logged in to the wrong account or just unlucky. 
+            In any case, you need to be using your puzzle input. 
+            If you're stuck, make sure you're using the full input data; 
+            there are also some general tips on the about page, 
+            or you can ask for hints on the subreddit. 
+            Please wait one minute before trying again."""
+        lib.verify_solution(solution, part_two=True)
 
 
 class TestDay15:
@@ -168,6 +243,16 @@ vvv<<^>^v^^><<>>><>^<<><^vv^^<>vvv<>><^^v>^>vv<>v<<<<v<^v>^<^^>>>^<v<v
 <><^^>^^^<><vvvvv^v<v<<>^v<v>v<<^><<><<><<<^^<<<^<<>><<><^^^>^^<>^>v<>
 ^^>vv<^v^v<vv>^<><v<^v>^^^>>>^^vvv^>vvv<>>>^<^>>>>>^<<^v>^vvv<>^<><<v>
 v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^"""
+    widened_large_eg = """####################
+##....[]....[]..[]##
+##............[]..##
+##..[][]....[]..[]##
+##....[]@.....[]..##
+##[]##....[]......##
+##[]....[]....[]..##
+##..[][]..[]..[][]##
+##........[]......##
+####################"""
 
     def test_p1_dev(self):
         wh = a.day_15_load_warehouse(self.small_eg[:self.small_eg.index("\n\n")])
@@ -175,16 +260,32 @@ v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^"""
                   self.small_eg[:self.small_eg.index("\n\n")].count("\n") + 1)
         expected = {(20, "^"): 11, (20, "<"): 20, (11, ">"): 13}
         for args, result in expected.items():
-            assert a.day_15_search_in_front(wh, dims, *args) == result
+            assert a.day_15_look_ahead(wh, dims, *args) == result
 
     def test_part_one(self):
         assert a.day_15_part_one(self.small_eg) == 2028
         assert a.day_15_part_one(self.large_eg) == 10092
         lib.verify_solution(a.day_15_part_one(), 1486930)
 
+    def test_p2_dev(self):
+        assert a.day_15_p2_widen_warehouse(
+            a.day_15_load_warehouse(self.large_eg[:self.large_eg.index("\n\n")])
+        ) == a.day_15_load_warehouse(self.widened_large_eg)
+        gps_eg = """##########
+##...[]...
+##........"""
+        assert a.day_15_gps_score(
+            a.day_15_load_warehouse(gps_eg), gps_eg.index("\n") + 1
+        ) == 105
+        test_moves = "^^<<<vvvvvvvvvvv"
+        a.day_15_part_two(
+            self.large_eg[:self.large_eg.index("\n\n")] + "\n\n" + test_moves,
+            start_pos=92
+        )
+
     def test_part_two(self):
         assert a.day_15_part_two(self.large_eg) == 9021
-        lib.verify_solution(a.day_15_part_two(), part_two=True)
+        lib.verify_solution(a.day_15_part_two(), 1492011, part_two=True)
 
 
 class TestDay14:
