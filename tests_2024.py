@@ -164,51 +164,16 @@ class TestDay16:
         lib.verify_solution(a.day_16_part_one(), 115500)
 
     def test_part_two(self):
-        # with open("day_16.csv") as csv_file:
-        #     csv_text = csv_file.read()
-        # a.day_16_distances_table = {}
-        # for row in csv_text.split("\n"):
-        #     if not row:
-        #         break
-        #     point = lib.Point(*tuple(
-        #         int(m.group().strip(",)"))
-        #         for m in [*re.finditer(r"\d+\)?,", row)]
-        #     ))
-        #     facing_up = re.search(r"[TF]", row).group() == "T"
-        #     key = point, facing_up
-        #     value = int(re.search(r"e,\d+", row).group()[2:])
-        #     a.day_16_distances_table[key] = value
-        # maze = a.day_16_load_maze()
-        # junctions = {
-        #     *filter(
-        #         lambda pt: len(a.day_16_walkable_neighbours(pt, maze)) > 2,
-        #         maze)
-        # }
-        # junctions.update([a.day_16_start, a.day_16_end])
-        # a.day_16_walks_table = a.day_16_build_walks_table(junctions, maze)
-        # a.day_16_start, a.day_16_end = lib.Point(139, 1), lib.Point(1, 139)
-        # a.day_16_distances_table = {}
-        # assert a.day_16_part_two(self.small_eg) == 45
-        # a.day_16_distances_table = {}
-        # TODO: fails here.  Looks like it's failing to
-        #   spot the upper of the two possible best paths
-        # TODO: find the longest walk when constructing walk table
-        #   In distances table:
-        #       (Point(x=9, y=9), False): 8034
-        #       (Point(x=11, y=11), True): 7034
+        a.day_16_part_one(self.small_eg)
+        assert a.day_16_part_two(self.small_eg) == 45
+        a.day_16_distances_table = {}
+        a.day_16_part_one(self.big_eg)
         assert a.day_16_part_two(self.big_eg) == 64
+        a.day_16_distances_table = {}
+        a.day_16_part_one()
         solution = a.day_16_part_two()
-        # this took 06:23 minutes
         assert solution > 545
-        """That's not the right answer; your answer is too low. 
-            Curiously, it's the right answer for someone else; 
-            you might be logged in to the wrong account or just unlucky. 
-            In any case, you need to be using your puzzle input. 
-            If you're stuck, make sure you're using the full input data; 
-            there are also some general tips on the about page, 
-            or you can ask for hints on the subreddit. 
-            Please wait one minute before trying again."""
-        lib.verify_solution(solution, part_two=True)
+        lib.verify_solution(solution, 679, part_two=True)
 
 
 class TestDay15:

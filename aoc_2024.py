@@ -265,7 +265,8 @@ def day_17_combo_op(register: {}, raw_operand: int) -> int:
 
 
 day_16_start, day_16_end = (lib.Point(0, 0) for _ in range(2))
-day_16_distances_table, day_16_walks_table = ({} for _ in range(2))
+day_16_distances_table, day_16_walks_table, day_16_previous_table = \
+    ({} for _ in range(3))
 day_16_walks_taken = set()
 
 
@@ -273,133 +274,126 @@ def day_16_part_one(text: str = "") -> int:
     day_16_set_up(text)
     return min(
         day_16_distances_table[(day_16_end, fc)]
+        if (day_16_end, fc) in day_16_distances_table else 1_000_000_000
         for fc in (True, False)
     )
+
+
+def day_16_directional_points(walkable: set) -> set:
+    d = set()
+    for w in walkable:
+        neighbours = day_16_walkable_neighbours(w, walkable)
+        x_s, y_s = {n.y for n in neighbours}, {n.x for n in neighbours}
+        if len(x_s) == 1:
+            d.add((w, True))
+        elif len(y_s) == 1:
+            d.add((w, False))
+        else:
+            d.update({(w, True), (w, False)})
+    return d
+
+
+def day_16_pd_neighbours(drnl_pt: (lib.Point, bool), directional: set) -> set:
+    reachable = set()
+    my_loc, my_dir = drnl_pt
+    if (my_loc, not my_dir) in directional:
+        reachable.add((my_loc, not my_dir))
+    reachable.update(
+        {
+            (mv(my_loc), my_dir)
+            for mv in pm23.values()
+            if (mv(my_loc), my_dir) in directional
+        }
+    )
+    return reachable
 
 
 def day_16_part_two(text: str = "") -> int:
-    global day_16_distances_table, day_16_walks_table, day_16_walks_taken
-    day_16_walks_taken = set()
-    day_16_set_up(text)
+    global day_16_distances_table, day_16_walks_table
+    # day_16_set_up(text)
+    walks_taken = set()
 
-    dist_min = min(
-        day_16_distances_table[(day_16_end, fc)]
-        for fc in (True, False)
-    )
-    optimal_end = [(day_16_end, ff)
-                   for ff in (False, True)
-                   if day_16_distances_table[(day_16_end, ff)] == dist_min]
-    print(day_16_backtrack_route([optimal_end[0]]))
-    print(f"{day_16_walks_taken=}")
-    return (sum(wt[2] % 100 for wt in day_16_walks_taken) +
-            len(day_16_walks_taken) + 1)
+    # assume part one has run already with the same text
+    end_keys = [(day_16_end, bb) for bb in (False, True)]
+    min_dist = 1_000_000_000
+    end = end_keys[0]
+    if end in day_16_distances_table:
+        min_dist = day_16_distances_table[end]
+    if (end_keys[1] in day_16_distances_table
+            and day_16_distances_table[end_keys[1]] < min_dist):
+        end = end_keys[1]
+    print(f"{end=}")
+
+    queue = [[end]]
+    while queue:
+        route = queue.pop()
+        previous_walks_data = dict(filter(
+            lambda i: i[0] == route[-1]
+            , day_16_previous_table.items()
+        ))
+        walks = [s for v in previous_walks_data.values() for s in v]
+        for pw in walks:
+            queue.append(route + [pw[0]])
+            walks_taken.add(pw)
+
+    moving_walks = [w[1][0] for w in walks_taken if w[1][0] != w[0][0]]
+    duplication = len(moving_walks) - len(set(moving_walks))
+    # +1 is to count the starting point
+    return sum(wt[2] % 100 for wt in walks_taken) - duplication + 1
 
 
 def day_16_set_up(text: str = ""):
-    global day_16_distances_table, day_16_walks_table
+    global day_16_distances_table, day_16_walks_table, day_16_previous_table
     maze = day_16_load_maze(text)
+    dp = day_16_directional_points(maze)
     junctions = {
         *filter(
-            lambda pt: len(day_16_walkable_neighbours(pt, maze)) > 2,
-            maze)
+            lambda pt: len(day_16_walkable_neighbours(pt[0], maze)) > 2,
+            dp)
     }
-    junctions.update([day_16_start, day_16_end])
+    junctions.update([dpp for dpp in dp if dpp[0] in (day_16_start, day_16_end)])
+    junctions.add((day_16_start, False))
     day_16_walks_table = day_16_build_walks_table(junctions, maze)
-    # jf_pairs is (junction, <arriving at that junction vertically>).
-    # A junction's neighbours are other junction/facing pairs that
-    #   can be reached using a walk in the table
-    jf_pairs = {
-        tuple((junc, facing))
-        for junc in junctions
-        for facing in (False, True)
-    }
-    day_16_distances_table = day_16_dijkstra_distances(
-        maze, jf_pairs, day_16_walks_table
+    day_16_distances_table, day_16_previous_table = day_16_dijkstra_distances(
+        junctions, day_16_walks_table
     )
 
 
-def day_16_backtrack_route(route: []) -> [[]]:
-    global day_16_walks_taken
-    if day_16_distances_table[route[-1]] == 0:
-        return [route]
-    backward_neighbours = [
-        *filter(
-            lambda k: any(lib.manhattan_distance(w[0], k[0]) == 1
-                          and w[1] == route[-1][0]
-                          for w in day_16_walks_table)
-                      and k[0] != route[-1][0]
-            ,
-            day_16_distances_table.keys()
-        )
-    ]
-    shortest_ngb_dist = min(
-        day_16_distances_table[ngb]
-        for ngb in backward_neighbours
-    )
-    # print(f"{shortest_ngb_dist=}")
-    neighbours_visited = [
-        nnn for nnn in backward_neighbours
-        if day_16_distances_table[nnn] == shortest_ngb_dist
-    ]
-    walks_used = [
-        [w for w in day_16_walks_table
-         if lib.manhattan_distance(nv[0], w[0]) == 1
-         and w[1] == route[-1][0]][0]
-        for nv in neighbours_visited
-    ]
-    new_routes = [
-        route + [nnv]
-        for nnv in neighbours_visited
-    ]
-    day_16_walks_taken.update(walks_used)
-    return [btr for rt in new_routes for btr in day_16_backtrack_route(rt)]
-
-
-def day_16_dijkstra_distances(maze: set, junctions: set, walks: {()}) -> {}:
+def day_16_dijkstra_distances(directional_juncs: set, walks: {()}) -> ({},):
     if len(day_16_distances_table):
         return day_16_distances_table
-    j_dist = {jf: 1_000_000_000 for jf in junctions}
+    j_dist = {jf: 1_000_000_000 for jf in directional_juncs}
     j_dist[(day_16_start, False)] = 0
-    while junctions:
-        closest = min(junctions, key=lambda wp: j_dist[wp])
-        neighbour_walks = [
-            *filter(
-                lambda w:
-                w[0] in day_16_walkable_neighbours(closest[0], maze)
-                and (w[1], w[3]) in junctions,
-                walks
-            )
-        ]
+    previous = {jfp: set() for jfp in directional_juncs}
+    while directional_juncs:
+        closest = min(directional_juncs, key=lambda wp: j_dist[wp])
+        neighbour_walks = [*filter(lambda w: w[0] == closest, walks)]
         for nw in neighbour_walks:
             ngb_distance = j_dist[closest] + nw[2]
-            vert = closest[0].y == nw[0].y
-            ngb_distance += 1
-            if vert != closest[1]:
-                ngb_distance += 1_000
-            if ngb_distance < j_dist[(nw[1], nw[3])]:
-                j_dist[(nw[1], nw[3])] = ngb_distance
-        junctions.remove(closest)
-
-    # t_dict = ""
-    # for k, v in j_dist.items():
-    #     loc, facing = k
-    #     t_dict += ",".join([f"{tuple(loc)}"] + [f"{facing}"] + [f"{v}"]) + "\n"
-    # with open("day_16.csv", "w") as file:
-    #     file.write(t_dict)
-
-    return j_dist
+            if ngb_distance == j_dist[nw[1]]:
+                previous[nw[1]].add(nw)
+            elif ngb_distance < j_dist[nw[1]]:
+                j_dist[nw[1]] = ngb_distance
+                previous[nw[1]] = {nw}
+        directional_juncs.remove(closest)
+    return j_dist, previous
 
 
-def day_16_build_walks_table(junctions: set, maze: dict) -> {()}:
+def day_16_build_walks_table(directional_junctions: set, maze: dict) -> {()}:
     walks = set()
-    for j in junctions:
-        for ngb in day_16_walkable_neighbours(j, maze):
-            cost = 0
-            moving_vertically = ngb.y == j.y
-            walk = [ngb]
+    for j in directional_junctions:
+        facing = j[1]
+        for ngb in day_16_walkable_neighbours(j[0], maze):
+            if facing and ngb.y != j[0].y:
+                continue
+            if (not facing) and ngb.x != j[0].x:
+                continue
+            cost = 1
+            moving_vertically = facing
+            walk = [j[0], ngb]
             while True:
                 next_available = [
-                    *filter(lambda p: p not in walk and p != j,
+                    *filter(lambda p: p not in walk and p != j[0],
                             day_16_walkable_neighbours(walk[-1], maze))
                             ]
                 if not next_available:
@@ -410,9 +404,12 @@ def day_16_build_walks_table(junctions: set, maze: dict) -> {()}:
                 if vert != moving_vertically:
                     moving_vertically = vert
                     cost += 1_000
-                if walk[-1] in junctions:
+                if (walk[-1], moving_vertically) in directional_junctions:
                     break
-            walks.add((ngb, walk[-1], cost, moving_vertically))
+            if (walk[-1], moving_vertically) in directional_junctions:
+                walks.add((j, (walk[-1], moving_vertically), cost))
+        if (j[0], not j[1]) in directional_junctions:
+            walks.add((j, (j[0], not j[1]), 1_000))
     return walks
 
 
@@ -506,12 +503,6 @@ def day_15_p2_widen_warehouse(warehouse: {}) -> {}:
             case _:
                 wide[doubled] = wide[doubled + 1] = warehouse[loc]
     return wide
-
-
-def day_15_p2_vertical_look_ahead(
-        warehouse: {}, dims: (int,), initial_pos: int, direction: str,
-        immediate_neighbour: bool = False) -> int:
-    return 0
 
 
 def day_15_load_warehouse(text: str) -> {}:
