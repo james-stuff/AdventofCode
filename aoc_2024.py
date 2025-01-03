@@ -208,6 +208,30 @@ def day_17_part_one(text: str = "") -> str:
     return day_17_execute(*day_17_load(text))
 
 
+def day_17_part_two(text: str = "") -> int:
+    _, program = day_17_load(text)
+    return day_17_predict_register_a(program)
+
+
+def day_17_predict_register_a(output: [int]) -> int:
+    # op_pairs = [
+    #     (n, output[(i * 2) + 1])
+    #     for i, n in enumerate(output[::2])
+    # ]
+    # print(op_pairs)
+    # print(f"{len(output)=}")
+    a_value = 0
+    for j, m in enumerate(output):
+        a_value += (m ^ 7) << ((3 * j) + 1)
+    return a_value
+
+
+def day_17_step_deconstruct(output_value: int) -> int:
+    """which mod-8 value produces the desired output_value?"""
+    reg_a_mod_8 = output_value ^ 6
+    return reg_a_mod_8
+
+
 def day_17_load(text: str = "") -> (str,):
     if not text:
         text = Puzzle24(17).get_text_input()
@@ -241,8 +265,6 @@ def day_17_execute(register: {}, program: [int]) -> str:
                 if register["A"] != 0:
                     pointer = operand
                     p_increment = 0
-                    # what if the operand == 0?  Does that mean
-                    # it doesn't "jump" so need to keep p_increment = 2?
             case 4:     # bxc
                 register["B"] = register["B"] ^ register["C"]
             case 5:     # out
@@ -606,12 +628,9 @@ def day_14_part_two() -> int:
         points distributed symmetrically about the vertical axis"""
     robots = day_14_load_data(Puzzle24(14).get_text_input().strip("\n"))
     grid_w_x_h = 101, 103
-    positions, velocities = ([t[ind] for t in robots] for ind in range(2))
-    for time in range(1_000_000):
-        positions = [
-            day_14_robot_position(pos, vel, grid_w_x_h, iterations=1)
-            for pos, vel in zip(positions, velocities)
-        ]
+    for time in range(-1, -10, -1):
+        positions = day_14_all_robot_positions(robots, grid_w_x_h, time)
+        day_14_display_grid(positions, grid_w_x_h)
         if day_14_looks_like_a_christmas_tree(positions, grid_w_x_h):
             day_14_display_grid(positions, grid_w_x_h)
             return time
@@ -642,7 +661,8 @@ def day_14_display_grid(robot_positions: [(int,)], grid_dims: (int,)):
     w, h = grid_dims
     for line in range(h):
         print("".join(
-            "#" if tuple((x, line)) in robot_positions else "."
+            # "#" if tuple((x, line)) in robot_positions else "."
+            f"{robot_positions.count(tuple((x, line)))}" if tuple((x, line)) in robot_positions else "."
             for x in range(w)
         ))
 
@@ -653,10 +673,9 @@ def day_14_part_one(text: str = "") -> int:
         text = Puzzle24(14).get_text_input().strip("\n")
         grid_w_x_h = 101, 103
     robot_p_v_tuples = day_14_load_data(text)
-    final_positions = [
-        day_14_robot_position(*pvt, grid_w_x_h)
-        for pvt in robot_p_v_tuples
-    ]
+    final_positions = day_14_all_robot_positions(
+        robot_p_v_tuples, grid_w_x_h
+    )
 
     quadrant_scores = [
         len(
@@ -679,6 +698,15 @@ def day_14_halve_grid(
     return [
         pt for pt in points
         if floor <= pt[across_middle] < ceiling
+    ]
+
+
+def day_14_all_robot_positions(
+        robot_data: [((int,),)], grid_dims: (int,),
+        time_seconds: int = 100) -> [(int,)]:
+    return [
+        day_14_robot_position(*pv, grid_dims, iterations=time_seconds)
+        for pv in robot_data
     ]
 
 

@@ -106,10 +106,42 @@ Program: 0,3,5,4,3,0"""
         a.day_17_execute(reg, [4, 0])
         assert reg["B"] == 44354
 
+    def p2_alt_exec(self, reg: {}) -> str:
+        output = ""
+        while reg["A"] > 0:
+            reg["B"] = reg["A"] % 8 ^ 5
+            reg["C"] = reg["A"] // 2 ** reg["B"]
+            reg["B"] = reg["B"] ^ 6 ^ reg["C"]
+            output += f"{reg['B'] % 8},"
+            reg["A"] //= 8
+        return output[:-1]
+
+    def test_p2_dev(self):
+        r, p = a.day_17_load()
+        saved_r = {**r}
+        assert self.p2_alt_exec(r) == a.day_17_execute(saved_r, p)
+        assert a.day_17_step_deconstruct(2) == 33940147 % 8
+
     def test_part_two(self):
         r, p = a.day_17_load(self.p2_eg)
         r["A"] = 117440
-        assert a.day_17_execute(r, p) == "0,3,5,4,3,0"
+        assert a.day_17_execute(r, p) == ",".join(f"{n}" for n in p)
+        _, p2p = a.day_17_load()
+        a.day_17_predict_register_a(p2p)
+        # assert a.day_17_predict_register_a(p) == 117440
+        # assert a.day_17_part_two(self.p2_eg) == 117440
+        solution = a.day_17_part_two()
+        reg, prog = a.day_17_load()
+        reg["A"] = solution
+        assert a.day_17_execute(reg, prog) == ",".join(f"{nn}" for nn in prog)
+        lib.verify_solution(solution, part_two=True)
+
+        """The 3,0 at end of program causes it to loop back to start,
+            until register A reaches zero and the program terminates.
+            Each 0 opcode divides register A value by 2^operand.
+            Each 5 opcode appends to output (5, 5) gives %8 value of B
+            There is one output and one division of Register A by 8
+            per loop"""
 
 
 class TestDay16:
