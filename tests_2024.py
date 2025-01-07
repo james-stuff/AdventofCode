@@ -112,22 +112,24 @@ Program: 0,3,5,4,3,0"""
             reg["B"] = reg["A"] % 8 ^ 5
             reg["C"] = reg["A"] // 2 ** reg["B"]
             reg["B"] = reg["B"] ^ 6 ^ reg["C"]
-            output += f"{reg['B'] % 8},"
+            output += f"{reg['B'] % 8}"
             reg["A"] //= 8
-        return output[:-1]
+        return ",".join(output)
 
     def test_p2_dev(self):
         r, p = a.day_17_load()
         saved_r = {**r}
         assert self.p2_alt_exec(r) == a.day_17_execute(saved_r, p)
         assert a.day_17_step_deconstruct(2) == 33940147 % 8
+        """Key insight: puzzle is asking for the LOWEST POSITIVE
+            initial value for register A"""
 
     def test_part_two(self):
         r, p = a.day_17_load(self.p2_eg)
         r["A"] = 117440
         assert a.day_17_execute(r, p) == ",".join(f"{n}" for n in p)
         _, p2p = a.day_17_load()
-        a.day_17_predict_register_a(p2p)
+        # a.day_17_predict_register_a(p2p)
         # assert a.day_17_predict_register_a(p) == 117440
         # assert a.day_17_part_two(self.p2_eg) == 117440
         solution = a.day_17_part_two()

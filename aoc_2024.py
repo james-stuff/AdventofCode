@@ -214,21 +214,34 @@ def day_17_part_two(text: str = "") -> int:
 
 
 def day_17_predict_register_a(output: [int]) -> int:
-    # op_pairs = [
-    #     (n, output[(i * 2) + 1])
-    #     for i, n in enumerate(output[::2])
-    # ]
-    # print(op_pairs)
-    # print(f"{len(output)=}")
+    """ First time around (in forward mode), min. a_value is simply 1"""
     a_value = 0
-    for j, m in enumerate(output):
-        a_value += (m ^ 7) << ((3 * j) + 1)
+    for j, m in enumerate(output[::-1]):
+        a_value = a_value * 8
+        last_3_bits_of_a = 0
+        solved = False
+        while not solved:
+            for p in range(8):
+                b = p ^ 5
+                c = (a_value + p) // (2 ** b)
+                output = b ^ 6 ^ c % 8
+                if output == m:
+                    last_3_bits_of_a = p
+                    solved = True
+                    break
+                elif p == 7:
+                    print(f"No p-value found for {m=}, {a_value=}")
+                    a_value += 1
+        a_value += last_3_bits_of_a
     return a_value
 
 
 def day_17_step_deconstruct(output_value: int) -> int:
     """which mod-8 value produces the desired output_value?"""
-    reg_a_mod_8 = output_value ^ 6
+    """Last step: output = last three binary digits of register B
+            We know register A is 1-7"""
+    b = [n ^ 5 for n in range(1, 8)]
+    reg_a_mod_8 = min(((2 ** bb) * output_value) ^ 6 ^ bb for bb in b)
     return reg_a_mod_8
 
 
