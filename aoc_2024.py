@@ -209,31 +209,70 @@ def day_17_part_one(text: str = "") -> str:
 
 
 def day_17_part_two(text: str = "") -> int:
-    _, program = day_17_load(text)
-    return day_17_predict_register_a(program)
+    register, program = day_17_load(text)
+    # register["A"] = 0
+    a = 0
+    for i in reversed(range(len(program))):
+        print(f"{i=}, {a=}")
+        a <<= 3
+        increments = 0
+        while day_17_execute(
+                {"A": a, "B": 0, "C": 0}, program
+        ) != ",".join(f"{p}" for p in program[i:]):
+            a += 1
+            increments += 1
+        if increments > 7:
+            print(f"\tRequired increment of {increments}")
+    return a
+
+    # def previous_octet(prog: [int], reg_a: int) -> int:
+    #     print(f"{reg_a=}, {prog=}")
+    #     if not prog:
+    #         return reg_a
+    #     output = prog[-1]
+    #     reg_a <<= 3
+    #     while int(day_17_execute(
+    #             {"A": reg_a, "B": 0, "C": 0}, program
+    #     )[0]) != output:
+    #         reg_a += 1
+    #     reg_a = previous_octet(prog[:-1], reg_a)
+    #
+    #     # for _ in range(8):
+    #     #     reg_a += 1
+    #     #     if int(day_17_execute(
+    #     #             {"A": reg_a, "B": 0, "C": 0}, program
+    #     #     )[0]) == output:
+    #     #         reg_a = previous_octet(prog[:-1], reg_a)
+    #     #         break
+    #
+    # return previous_octet(program, 0)
 
 
 def day_17_predict_register_a(output: [int]) -> int:
-    """ First time around (in forward mode), min. a_value is simply 1"""
     a_value = 0
     for j, m in enumerate(output[::-1]):
         a_value = a_value * 8
-        last_3_bits_of_a = 0
-        solved = False
-        while not solved:
-            for p in range(8):
-                b = p ^ 5
-                c = (a_value + p) // (2 ** b)
-                output = b ^ 6 ^ c % 8
-                if output == m:
-                    last_3_bits_of_a = p
-                    solved = True
-                    break
-                elif p == 7:
-                    print(f"No p-value found for {m=}, {a_value=}")
-                    a_value += 1
-        a_value += last_3_bits_of_a
+        for a_incr in range(8):
+            last_3 = day_17_get_next_3_bits_of_a(a_value + a_incr, m)
+            if last_3 is not None:
+                a_value += last_3
+                if a_incr:
+                    # a_value = a_value + a_incr
+                    print(f"{a_incr=}, {last_3=}, {a_value=}")
+                break
     return a_value
+
+
+def day_17_get_next_3_bits_of_a(reg_a: int, out: int) -> int:
+    # if reg_a % 8:
+    #     print("debug")
+    for p in range(8):
+        b = p ^ 5
+        c = ((8 * (reg_a // 8)) + p) // (2 ** b)
+        output = (b ^ 6 ^ c) % 8
+        if output == out:
+            print(f"\t{reg_a=}, {out=}, {b=}, {c=}, return value={p}")
+            return p
 
 
 def day_17_step_deconstruct(output_value: int) -> int:
@@ -245,7 +284,7 @@ def day_17_step_deconstruct(output_value: int) -> int:
     return reg_a_mod_8
 
 
-def day_17_load(text: str = "") -> (str,):
+def day_17_load(text: str = "") -> ({}, [int]):
     if not text:
         text = Puzzle24(17).get_text_input()
     reg = {

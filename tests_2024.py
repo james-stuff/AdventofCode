@@ -135,6 +135,8 @@ Program: 0,3,5,4,3,0"""
         solution = a.day_17_part_two()
         reg, prog = a.day_17_load()
         reg["A"] = solution
+        print(f"{solution=}")
+        assert solution > 107408875647753
         assert a.day_17_execute(reg, prog) == ",".join(f"{nn}" for nn in prog)
         lib.verify_solution(solution, part_two=True)
 
