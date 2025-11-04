@@ -2,6 +2,11 @@ import re
 import aoc_2024 as a
 import library as lib
 import timeit
+import polars
+
+
+def test_polars():
+    polars.show_versions()
 
 
 class TestDay19:
@@ -22,14 +27,6 @@ bbrgwb"""
         solution = a.day_19_part_one()
         assert solution < 304
         lib.verify_solution(solution)
-
-    def test_p1_investigation(self):
-        dodgy = "urwgbugrbguuuwuwwbggbwruubgbbubgrgrwruubrwrugbbbbgwbg"
-        for reverse_index in range(-1, (1 - len(dodgy)), -1):
-            desired = dodgy[reverse_index:]
-            c, _ = a.day_19_load()
-            print(f"{desired} -> "
-                  f"{a.day_19_recursive_can_make(desired, c)}")
 
 
 class TestDay18:

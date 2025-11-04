@@ -15,37 +15,11 @@ class Puzzle24(Puzzle):
 
 
 day_19_known_possible = set()
-
-
-def day_19_part_one(text: str = "") -> int:
-    components, desired = day_19_load(text)
-    all_letters = set(char for c in components for char in c)
-    print(f"{all_letters=}")
-    single_letters = {comp for comp in components if len(comp) == 1}
-    print(f"{single_letters=}")
-    first_pass = [
-        *filter(
-            lambda des:
-            day_19_can_make(des, components, single_letters, all_letters),
-            desired
-        )
-    ]
-    # return sum(day_19_recursive_can_make(des, components)#, single_letters, all_letters)
-    #            for des in desired)
-    total, seen = 0, 0
-    # ["urwgbugrbguuuwuwwbggbwruubgbbubgrgrwruubrwrugbbbbgwbg"]
-    for des in first_pass:
-        if seen == 43:
-            print(f"{des=}")
-        total += day_19_recursive_can_make(des, components.union(day_19_known_possible))
-        seen += 1
-        print(f"{total} of {seen} possible to make")
-        print(f"\tSize of known possibles: {len(day_19_known_possible)}")
-    return total
+day_19_impossible = set()
 
 
 def day_19_load(text: str = "") -> (set,):
-    global day_19_known_possible
+    global day_19_known_possible, day_19_impossible
     day_19_known_possible = set()
     if not text:
         text = Puzzle24(19).get_text_input().strip("\n")
@@ -55,66 +29,45 @@ def day_19_load(text: str = "") -> (set,):
     return components, desired
 
 
-def day_19_can_make(
-        desired_pattern: str, available: {str},
-        single_letters: set, all_letters: set
-) -> bool:
-    for ch in all_letters - single_letters:
-        ch_pos = day_19_all_indices(ch, desired_pattern)
-        allowable = []
-        for av in filter(lambda avl: ch in avl, available):
-            allowable.extend(
-                [
-                    mm.start() + ind
-                    for mm in re.finditer(av, desired_pattern)
-                    for ind in day_19_all_indices(ch, av)
-                ]
+def day_19_part_one(text: str = "") -> int:
+    global day_19_impossible
+    day_19_impossible = set()
+    available, strings = day_19_load(text)
+    return len(
+        [
+            *filter(
+                lambda v: v,
+                (
+                    day_19_allowable(s, available)
+                    for s in strings
+                )
             )
-        if any(cp not in allowable for cp in ch_pos):
-            return False
-
-        # found_ranges = []
-        # for av_pattern in filter(lambda av: ch in av, available):
-        #     found_ranges.extend([
-        #         (mm.start(), mm.end())
-        #         for mm in re.finditer(av_pattern, desired_pattern)
-        #     ])
-        # if any(
-        #         all(cp not in range(*r) for r in found_ranges)
-        #         for cp in ch_pos
-        # ):
-        #     return False
-    return True
-
-
-def day_19_recursive_can_make(
-        desired_pattern: str, available: {str},
-) -> bool:
-    global day_19_known_possible
-    # if len(day_19_known_possible) > 633:
-    #     print(f"\t{desired_pattern}")
-    if desired_pattern in available:
-        return True
-    first_fragments = [
-        *filter(lambda a: desired_pattern.startswith(a),
-                sorted(available, key=lambda av: len(av), reverse=True))
-    ]
-    possible = any(
-        day_19_recursive_can_make(
-            desired_pattern[len(ff):],
-            sorted(available, key=lambda av: len(av), reverse=True)
-        )
-        for ff in first_fragments
+        ]
     )
-    if possible:
-        day_19_known_possible.add(desired_pattern)
-        if len(day_19_known_possible) > 633:
-            print(f"\tNew possibility: {desired_pattern}")
-    return possible
 
 
-def day_19_all_indices(character: str, string: str) -> [int]:
-    return [m.start() for m in re.finditer(f"{character}", string)]
+def day_19_allowable(wanted: str, available_bits: str) -> bool:
+    if wanted in day_19_impossible:
+        return False
+    print(f"\tWorking on {wanted}")
+    allowable_bits = [
+        *filter(
+            lambda b: wanted.startswith(b),
+            available_bits
+        )
+    ]
+    if allowable_bits:
+        if any(bit == wanted for bit in allowable_bits):
+            print("Confirmed possible")
+            return True
+        if any(
+            day_19_allowable(wanted[len(bb):], available_bits)
+            for bb in allowable_bits
+        ):
+            return True
+    day_19_impossible.add(wanted)
+    print("Confirmed impossible")
+    return False
 
 
 def day_18_part_one(text: str = "") -> int:
