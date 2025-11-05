@@ -16,11 +16,50 @@ class Puzzle24(Puzzle):
 
 day_19_known_possible = set()
 day_19_impossible = set()
+day_19_known_ways = {}
+
+
+def day_19_part_two(text: str = "") -> int:
+    available, strings = day_19_load(text)
+    ways = []
+    for s in strings:
+        c = day_19_count_ways(s, available)
+        ways.append(c)
+        print(f"\t{c} ways of getting '{s}'\n")
+    print(f"{len(ways)=}")
+    print(f"Number of zeroes: {len([*filter(lambda w: w == 0, ways)])}")
+    return sum(ways)
+
+
+def day_19_count_ways(wanted: str, towels: set) -> int:
+    print(f"\tWorking on {wanted}")
+    if len(wanted) == 0:
+        return 1
+    if wanted in day_19_known_ways:
+        return day_19_known_ways[wanted]
+    usable = [
+        *filter(
+            lambda towel: wanted.startswith(towel),
+            towels
+        )
+    ]
+    if usable:
+        no_of_ways = sum(
+            day_19_count_ways(wanted[len(ut):], towels)
+            for ut in usable
+        )
+        day_19_known_ways[wanted] = no_of_ways
+        return no_of_ways
+    day_19_impossible.add(wanted)
+    print(f"Confirmed impossible: {wanted}")
+    day_19_known_ways[wanted] = 0
+    return 0
 
 
 def day_19_load(text: str = "") -> (set,):
-    global day_19_known_possible, day_19_impossible
+    global day_19_known_possible, day_19_impossible, day_19_known_ways
     day_19_known_possible = set()
+    day_19_known_ways = {}
     if not text:
         text = Puzzle24(19).get_text_input().strip("\n")
     c, _, d = text.partition("\n\n")
@@ -46,7 +85,7 @@ def day_19_part_one(text: str = "") -> int:
     )
 
 
-def day_19_allowable(wanted: str, available_bits: str) -> bool:
+def day_19_allowable(wanted: str, available_bits: set) -> bool:
     if wanted in day_19_impossible:
         return False
     print(f"\tWorking on {wanted}")

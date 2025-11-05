@@ -26,7 +26,13 @@ bbrgwb"""
         a.day_19_known_possible = set()
         solution = a.day_19_part_one()
         assert solution < 304
-        lib.verify_solution(solution)
+        lib.verify_solution(solution, correct=300)
+
+    def test_part_two(self):
+        assert a.day_19_part_two(self.eg) == 16
+        p2_solution = a.day_19_part_two()
+        assert p2_solution < 960732611151017
+        lib.verify_solution(p2_solution, correct=624802218898092, part_two=True)
 
 
 class TestDay18:
