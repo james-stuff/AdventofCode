@@ -14,9 +14,19 @@ class Puzzle24(Puzzle):
             return input_file.read()
 
 
-day_19_known_possible = set()
-day_19_impossible = set()
-day_19_known_ways = {}
+def day_20_load(text: str = "") -> {}:
+    if not text:
+        text = Puzzle24(20).get_text_input().strip("\n")
+    return dict(
+        filter(
+            lambda i: i[1] != "#", day_6_load_map(text).items()
+        )
+    )
+
+
+lib.memo_pad["day_19_known_possible"] = set()
+lib.memo_pad["day_19_impossible"] = set()
+lib.memo_pad["day_19_known_ways"] = {}
 
 
 def day_19_part_two(text: str = "") -> int:
@@ -35,8 +45,8 @@ def day_19_count_ways(wanted: str, towels: set) -> int:
     print(f"\tWorking on {wanted}")
     if len(wanted) == 0:
         return 1
-    if wanted in day_19_known_ways:
-        return day_19_known_ways[wanted]
+    if wanted in lib.memo_pad["day_19_known_ways"]:
+        return lib.memo_pad["day_19_known_ways"][wanted]
     usable = [
         *filter(
             lambda towel: wanted.startswith(towel),
@@ -48,20 +58,16 @@ def day_19_count_ways(wanted: str, towels: set) -> int:
             day_19_count_ways(wanted[len(ut):], towels)
             for ut in usable
         )
-        day_19_known_ways[wanted] = no_of_ways
+        lib.memo_pad["day_19_known_ways"][wanted] = no_of_ways
         return no_of_ways
-    day_19_impossible.add(wanted)
+    lib.memo_pad["day_19_impossible"].add(wanted)
     print(f"Confirmed impossible: {wanted}")
-    day_19_known_ways[wanted] = 0
+    lib.memo_pad["day_19_known_ways"][wanted] = 0
     return 0
 
 
 def day_19_load(text: str = "") -> (set,):
-    global day_19_known_possible, day_19_impossible, day_19_known_ways
-    day_19_known_possible = set()
-    day_19_known_ways = {}
-    if not text:
-        text = Puzzle24(19).get_text_input().strip("\n")
+    text = lib.load(text)
     c, _, d = text.partition("\n\n")
     components = {*c.split(", ")}
     desired = d.split("\n")
@@ -69,8 +75,6 @@ def day_19_load(text: str = "") -> (set,):
 
 
 def day_19_part_one(text: str = "") -> int:
-    global day_19_impossible
-    day_19_impossible = set()
     available, strings = day_19_load(text)
     return len(
         [
@@ -86,7 +90,7 @@ def day_19_part_one(text: str = "") -> int:
 
 
 def day_19_allowable(wanted: str, available_bits: set) -> bool:
-    if wanted in day_19_impossible:
+    if wanted in lib.memo_pad["day_19_impossible"]:
         return False
     print(f"\tWorking on {wanted}")
     allowable_bits = [
@@ -104,7 +108,7 @@ def day_19_allowable(wanted: str, available_bits: set) -> bool:
             for bb in allowable_bits
         ):
             return True
-    day_19_impossible.add(wanted)
+    lib.memo_pad["day_19_impossible"].add(wanted)
     print("Confirmed impossible")
     return False
 

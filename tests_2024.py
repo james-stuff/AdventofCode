@@ -1,12 +1,28 @@
-import re
 import aoc_2024 as a
 import library as lib
 import timeit
-import polars
 
 
-def test_polars():
-    polars.show_versions()
+class TestDay20:
+    eg = """###############
+#...#...#.....#
+#.#.#.#.#.###.#
+#S#...#.#.#...#
+#######.#.#.###
+#######.#.#...#
+#######.#.###.#
+###..E#...#...#
+###.#######.###
+#...###...#...#
+#.#####.#.###.#
+#.#...#.#.#...#
+#.#.#.#.#.#.###
+#...#...#...###
+###############"""
+
+    def test_setup(self):
+        track = a.day_20_load(self.eg)
+        assert len(track) == 85
 
 
 class TestDay19:
@@ -23,7 +39,7 @@ bbrgwb"""
 
     def test_part_one(self):
         assert a.day_19_part_one(self.eg) == 6
-        a.day_19_known_possible = set()
+        # a.day_19_known_possible = set()
         solution = a.day_19_part_one()
         assert solution < 304
         lib.verify_solution(solution, correct=300)
