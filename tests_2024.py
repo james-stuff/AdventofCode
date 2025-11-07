@@ -21,8 +21,30 @@ class TestDay20:
 ###############"""
 
     def test_setup(self):
-        track = a.day_20_load(self.eg)
-        assert len(track) == 85
+        grid = a.day_20_load(self.eg)
+        assert "S" in grid.values()
+        assert "E" in grid.values()
+        assert len(grid) == 85
+        track = a.day_20_form_track(grid)
+        # print(track)
+        assert len(track) == 85 == len(set(track))
+
+    def test_part_one(self):
+        cheats = a.day_20_part_one(self.eg)
+        # assert cheats.count(2) == 14
+        # assert cheats.count(4) == 14
+        # assert cheats.count(6) == 2
+        # assert cheats.count(8) == 4
+        # assert cheats.count(10) == 2
+        # assert cheats.count(12) == 3
+        # assert cheats.count(20) == 1
+        # assert cheats.count(36) == 1
+        # assert cheats.count(38) == 1
+        # assert cheats.count(40) == 1
+        # assert cheats.count(64) == 1
+        assert cheats == 0
+        solution = a.day_20_part_one()
+        lib.verify_solution(solution)
 
 
 class TestDay19:

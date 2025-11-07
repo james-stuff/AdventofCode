@@ -9,12 +9,16 @@ memo_pad = {}
 
 
 def load(text: str = "") -> str:
-    caller = inspect.stack()[1]
+    caller = inspect.currentframe()
+    while not re.search(r"aoc_\d{4}.py$", caller.f_code.co_filename):
+        caller = caller.f_back
+    filename = caller.f_code.co_filename
+    function_name = caller.f_code.co_name
     m_year, m_day = (
         re.search(pattern, string)
         for pattern, string in zip(
                 [r"\d{4}.py", r"_\d+_"],
-                [caller.filename, caller.function]
+                [filename, function_name]
         )
     )
     if m_year and m_day:
@@ -25,7 +29,7 @@ def load(text: str = "") -> str:
         folder = f"inputs\\{m_year.group()[:4]}"
         possible_files = [
             *filter(
-                lambda fn: re.match(r"\D*" + f"{day}.txt$", fn),
+                lambda fn: re.match(r"\D+" + f"{day}.txt$", fn),
                 os.listdir(folder)
             )
         ]
@@ -42,6 +46,16 @@ def clear_memos(day: str):
             var_type = type(memo_pad[memo])
             if memo_pad[memo]:
                 memo_pad[memo] = var_type()
+
+
+def load_grid(raw_text: str, exclude_chars: str = "#") -> dict:
+    raw_text = load(raw_text)
+    return {
+        Point(y, x): char
+        for y, row in enumerate(raw_text.split("\n"))
+        for x, char in enumerate(row)
+        if char not in exclude_chars
+    }
 
 
 def manhattan_distance(point_1: (int,), point_2: (int,)) -> int:

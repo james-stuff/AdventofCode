@@ -15,13 +15,52 @@ class Puzzle24(Puzzle):
 
 
 def day_20_load(text: str = "") -> {}:
-    if not text:
-        text = Puzzle24(20).get_text_input().strip("\n")
-    return dict(
-        filter(
-            lambda i: i[1] != "#", day_6_load_map(text).items()
-        )
-    )
+    return lib.load_grid(text)
+
+
+def day_20_part_one(text: str = "") -> int:
+    track = day_20_form_track(day_20_load(text))
+    cheats = {}
+    for i, pt in enumerate(track):
+        possible_cheats = day_20_cheats_available_from(pt, track)
+        cheats[i] = possible_cheats
+        # if possible_cheats:
+        #     print(f"From {pt} can go to: {[track[i] for i in possible_cheats]}")
+    savings_per_cheat = {
+        j: [vv - j - 2 for vv in v]
+        for j, v in cheats.items()
+    }
+    all_cheats = [sub_ch for ch in savings_per_cheat.values() for sub_ch in ch if ch]
+    return len([*filter(lambda c: c >= 100, all_cheats)])
+
+
+def day_20_form_track(grid: {}) -> [lib.Point]:
+    location = [*filter(lambda pt: grid[pt] == "S", grid)][0]
+    track = [location]
+    while grid[location] != "E":
+        for move in pm23.values():
+            next_loc = move(location)
+            if next_loc in grid and next_loc not in track:
+                location = next_loc
+                track.append(location)
+                break
+    return track
+
+
+def day_20_cheats_available_from(
+        location: lib.Point, track: [lib.Point]
+) -> [int]:
+    """return index of cheat destination in track"""
+    cheats = []
+    for move in pm23.values():
+        dest = move(move(location))
+        if (
+                dest in track and
+                move(location) not in track and
+                track.index(dest) > track.index(location)
+        ):
+            cheats.append(track.index(dest))
+    return cheats
 
 
 lib.memo_pad["day_19_known_possible"] = set()
