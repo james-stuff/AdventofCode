@@ -18,6 +18,18 @@ def day_20_load(text: str = "") -> {}:
     return lib.load_grid(text)
 
 
+def day_20_part_two(text: str = "") -> int:
+    lower_bound = 50 if text else 100
+    track = day_20_form_track(day_20_load(text))
+    cheat_gains = [
+        j + 1 - lib.manhattan_distance(pt, q)
+        for i, pt in enumerate(track)
+        for j, q in enumerate(track[i + 1:])
+        if lib.manhattan_distance(pt, q) <= min(j + 1 - lower_bound, 20)
+    ]
+    return len(cheat_gains)
+
+
 def day_20_part_one(text: str = "") -> int:
     track = day_20_form_track(day_20_load(text))
     cheats = {}
@@ -74,14 +86,14 @@ def day_19_part_two(text: str = "") -> int:
     for s in strings:
         c = day_19_count_ways(s, available)
         ways.append(c)
-        print(f"\t{c} ways of getting '{s}'\n")
-    print(f"{len(ways)=}")
-    print(f"Number of zeroes: {len([*filter(lambda w: w == 0, ways)])}")
+        # print(f"\t{c} ways of getting '{s}'\n")
+    # print(f"{len(ways)=}")
+    # print(f"Number of zeroes: {len([*filter(lambda w: w == 0, ways)])}")
     return sum(ways)
 
 
 def day_19_count_ways(wanted: str, towels: set) -> int:
-    print(f"\tWorking on {wanted}")
+    # print(f"\tWorking on {wanted}")
     if len(wanted) == 0:
         return 1
     if wanted in lib.memo_pad["day_19_known_ways"]:
@@ -100,7 +112,7 @@ def day_19_count_ways(wanted: str, towels: set) -> int:
         lib.memo_pad["day_19_known_ways"][wanted] = no_of_ways
         return no_of_ways
     lib.memo_pad["day_19_impossible"].add(wanted)
-    print(f"Confirmed impossible: {wanted}")
+    # print(f"Confirmed impossible: {wanted}")
     lib.memo_pad["day_19_known_ways"][wanted] = 0
     return 0
 
@@ -131,7 +143,7 @@ def day_19_part_one(text: str = "") -> int:
 def day_19_allowable(wanted: str, available_bits: set) -> bool:
     if wanted in lib.memo_pad["day_19_impossible"]:
         return False
-    print(f"\tWorking on {wanted}")
+    # print(f"\tWorking on {wanted}")
     allowable_bits = [
         *filter(
             lambda b: wanted.startswith(b),
@@ -140,7 +152,7 @@ def day_19_allowable(wanted: str, available_bits: set) -> bool:
     ]
     if allowable_bits:
         if any(bit == wanted for bit in allowable_bits):
-            print("Confirmed possible")
+            # print("Confirmed possible")
             return True
         if any(
             day_19_allowable(wanted[len(bb):], available_bits)
@@ -148,7 +160,7 @@ def day_19_allowable(wanted: str, available_bits: set) -> bool:
         ):
             return True
     lib.memo_pad["day_19_impossible"].add(wanted)
-    print("Confirmed impossible")
+    # print("Confirmed impossible")
     return False
 
 

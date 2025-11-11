@@ -44,7 +44,13 @@ class TestDay20:
         # assert cheats.count(64) == 1
         assert cheats == 0
         solution = a.day_20_part_one()
-        lib.verify_solution(solution)
+        lib.verify_solution(solution, correct=1499)
+
+    def test_part_two(self):
+        assert a.day_20_part_two(self.eg) == 285
+        solution = a.day_20_part_two()
+        assert 611267 < solution < 16402130 # also, it took 32-38 sec
+        lib.verify_solution(solution, part_two=True)
 
 
 class TestDay19:
@@ -71,6 +77,22 @@ bbrgwb"""
         p2_solution = a.day_19_part_two()
         assert p2_solution < 960732611151017
         lib.verify_solution(p2_solution, correct=624802218898092, part_two=True)
+
+    def test_gorgeous(self):
+        #https://www.reddit.com/r/adventofcode/comments/1hhlb8g/2024_day_19_solutions/
+        from functools import cache
+
+        @cache
+        def possible(design):
+            if not design:
+                return 1
+            return sum(possible(design[len(towel):])
+                       for towel in towels if design.startswith(towel))
+
+        towels,  designs = a.day_19_load()
+        pos = [possible(design) for design in designs]
+        print(sum(map(bool, pos)))
+        print(sum(pos))
 
 
 class TestDay18:
