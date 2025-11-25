@@ -3,6 +3,42 @@ import library as lib
 import timeit
 
 
+class TestDay21:
+    breakdown_029a = """<vA<AA>>^AvAA<^A>A<v<A>>^AvA^A<vA>^A<v<A>^A>AAvA^A<v<A>A>^AAAvA<^A>A
+v<<A>>^A<A>AvA<^AA>A<vAAA>^A
+<A^A>^^AvvvA
+029A"""
+    eg = """029A: <vA<AA>>^AvAA<^A>A<v<A>>^AvA^A<vA>^A<v<A>^A>AAvA^A<v<A>A>^AAAvA<^A>A
+980A: <v<A>>^AAAvA^A<vA<AA>>^AvAA<^A>A<v<A>A>^AAAvA<^A>A<vA>^A<A>A
+179A: <v<A>>^A<vA<A>>^AAvAA<^A>A<v<A>>^AAvA^A<vA>^AA<A>A<v<A>A>^AAAvA<^A>A
+456A: <v<A>>^AA<vA<A>>^AAvAA<^A>A<vA>^A<A>A<vA>^A<A>A<v<A>A>^AAvA<^A>A
+379A: <v<A>>^AvA^A<vA<AA>>^AAvA<^A>AAvA^A<vA>^AA<A>A<v<A>A>^AAAvA<^A>A"""
+    eg_solutions = {
+        door_code: typed_code
+        for line in eg.split("\n")
+        for door_code, _, typed_code in [line.partition(": ")]
+    }
+
+    def test_finding_optimal_solutions(self):
+        print("")
+        assert (self.breakdown_029a.split("\n")[2] in
+                a.day_21_robot_to_num("029A"))
+        assert (self.breakdown_029a.split("\n")[1] in
+                a.day_21_robot_to_robot(self.breakdown_029a.split("\n")[2]))
+        for door, typed in self.eg_solutions.items():
+            solution = a.day_21_optimal_key_sequence(door)
+            print(f"{door=}\t{solution=}")
+            assert len(solution) == len(typed)
+
+    def test_part_one(self):
+        print(a.day_21_remote_keypad)
+        print(a.day_21_numeric_keypad)
+        assert a.day_21_part_one(
+            "\n".join(self.eg_solutions.keys())) == 126_384
+        solution = a.day_21_part_one()
+        lib.verify_solution(solution, correct=171_596)
+
+
 class TestDay20:
     eg = """###############
 #...#...#.....#
@@ -49,8 +85,8 @@ class TestDay20:
     def test_part_two(self):
         assert a.day_20_part_two(self.eg) == 285
         solution = a.day_20_part_two()
-        assert 611267 < solution < 16402130 # also, it took 32-38 sec
-        lib.verify_solution(solution, part_two=True)
+        assert 611267 < solution < 16402130
+        lib.verify_solution(solution, correct=1027164, part_two=True)
 
 
 class TestDay19:
@@ -93,6 +129,7 @@ bbrgwb"""
         pos = [possible(design) for design in designs]
         print(sum(map(bool, pos)))
         print(sum(pos))
+        print(possible.cache_info())
 
 
 class TestDay18:

@@ -6,12 +6,121 @@ import library as lib
 from aoc_2023 import point_moves_2023 as pm23
 import itertools
 import operator
+from functools import cache
 
 
 class Puzzle24(Puzzle):
     def get_text_input(self) -> str:
         with open(f'inputs\\2024\\input{self.day}.txt', 'r') as input_file:
             return input_file.read()
+
+
+day_21_numeric_keypad = tuple(
+    tuple((lib.Point(x, y), f"{7 - (3 * x) + y}"))
+    for x in range(3)
+    for y in range(3)
+)
+day_21_numeric_keypad +=\
+    tuple((lib.Point(3, y), label) for y, label in zip(range(1, 3), "0A"))
+day_21_remote_keypad = tuple(
+    tuple((lib.Point(n // 3, n % 3), label))
+    for n, label in zip(range(1, 6), "^A<v>")
+)
+
+
+def day_21_part_one(text: str = ""):
+    return sum(
+        int(code[:3]) * len(day_21_optimal_key_sequence(code))
+        for code in day_21_load(text)
+    )
+
+
+def day_21_optimal_key_sequence(door_code: str) -> str:
+    all_possible = day_21_robot_to_num(door_code)
+    for _ in range(2):
+        all_possible = [
+            pp
+            for p in all_possible
+            for pp in day_21_robot_to_robot(p)
+        ]
+    return min(all_possible, key=lambda poss: len(poss))
+
+
+@cache
+def day_21_robot_to_robot(onward_code: str) -> [str]:
+    """list all the ways of moving the next robot in line
+        in order to enter the given code"""
+    onward_code = f"A{onward_code}"
+    options = []
+    for i, ch in enumerate(onward_code[:-1], start=1):
+        possible_next_steps = day_21_step(
+            ch, onward_code[i], keypad=day_21_remote_keypad
+        )
+        if options:
+            options = [
+                f"{opt}{pns}"
+                for opt in options
+                for pns in possible_next_steps
+            ]
+        else:
+            options = possible_next_steps
+    return options
+
+
+def day_21_robot_to_num(numeric_code: str) -> [str]:
+    """list all the ways the final robot can be moved in order to type
+        a given 3-digit plus A code"""
+    numeric_code = f"A{numeric_code}"
+    options = []
+    for i, ch in enumerate(numeric_code[:-1], start=1):
+        possible_next_steps = day_21_step(
+            ch, numeric_code[i], keypad=day_21_numeric_keypad
+        )
+        if options:
+            options = [
+                f"{opt}{pns}"
+                for opt in options
+                for pns in possible_next_steps
+            ]
+        else:
+            options = possible_next_steps
+    return options
+
+
+@cache
+def day_21_step(v1: str, v2: str, keypad: (lib.Point, str)) -> [str]:
+    """list all the ways of getting robot to enter keycodes
+        necessary to get between two numeric keys"""
+    loc1, loc2 = (
+        [*filter(
+            lambda tpl: tpl[1] == v,
+            keypad
+        )][0][0]
+        for v in (v1, v2)
+    )
+    vertical, horizontal = loc2.vt - loc1.vt, loc2.hz - loc1.hz
+    print(f"To get from {v1} to {v2} requires moving {horizontal=}, {vertical=}")
+    arrows = (f"{f"{'<' if horizontal < 0 else '>'}" * abs(horizontal)}"
+              f"{f"{'^' if vertical < 0 else 'v'}" * abs(vertical)}")
+    print(f"{arrows=}")
+
+    move_perms = set("".join(perm) + "A" for perm in itertools.permutations(arrows))
+
+    def is_valid(move_sequence: str) -> bool:
+        """no robot arm can ever be positioned outside the keypad area"""
+        loc = loc1
+        for mv in move_sequence:
+            loc = lib.move(loc, mv)
+            if not any(k[0] == loc for k in keypad):
+                return False
+        return True
+    return_value = [*filter(lambda mp: is_valid(mp[:-1]), move_perms)]
+    print(f"day_21_step({v1}, {v2}) -> {return_value}")
+    return return_value
+
+
+def day_21_load(text: str = "") -> {}:
+    return lib.load(text).split("\n")
 
 
 def day_20_load(text: str = "") -> {}:
@@ -22,10 +131,10 @@ def day_20_part_two(text: str = "") -> int:
     lower_bound = 50 if text else 100
     track = day_20_form_track(day_20_load(text))
     cheat_gains = [
-        j + 1 - lib.manhattan_distance(pt, q)
+        j + lower_bound + 2 - lib.manhattan_distance(pt, q)
         for i, pt in enumerate(track)
-        for j, q in enumerate(track[i + 1:])
-        if lib.manhattan_distance(pt, q) <= min(j + 1 - lower_bound, 20)
+        for j, q in enumerate(track[i + lower_bound + 1:])
+        if lib.manhattan_distance(pt, q) <= min(j + 2, 20)
     ]
     return len(cheat_gains)
 
