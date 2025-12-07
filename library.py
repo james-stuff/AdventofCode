@@ -128,12 +128,14 @@ def verify_2025(module, sol_pt_1: int = 0, sol_pt_2: int = 0):
     while not re.search(r"tests_\d{4}.py$", caller.f_code.co_filename):
         caller = caller.f_back
     test_class = re.search(
-        r"TestDay\d+\.", caller.f_code.co_qualname
-    ).group()[:-1]
-    day = int(re.search(r"\d+", test_class).group())
+        r"TestDay\d+", caller.f_code.co_qualname
+    ).group()
+    day = int(test_class[7:])
     print(f"\nDay {day}:")
-    for part in ("one", "two"):
+    for part, expected in zip(("one", "two"), (sol_pt_1, sol_pt_2)):
         func = f"day_{day}_part_{part}"
         if func in module.__dict__:
-            print(f"Part {part.title()} solution is "
-                  f"{module.__dict__[func]()}")
+            solution = module.__dict__[func]()
+            if expected:
+                assert solution == expected
+            print(f"Part {part.title()} solution is {solution}")

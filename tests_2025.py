@@ -28,8 +28,12 @@ class TestDay8:
 
 
 class TestDay7:
+    def test_p1(self):
+        solution = a.day_7_part_one()
+        assert solution > 917
+
     def test(self):
-        lib.verify_2025(a)
+        lib.verify_2025(a, 1524, 32982105837605)
 
 
 class TestDay6:
@@ -42,7 +46,7 @@ class TestDay6:
         assert a.day_6_part_two() > 10121317
 
     def test(self):
-        lib.verify_2025(a)
+        lib.verify_2025(a, 5060053676136, 9695042567249)
 
 
 class TestDay5:

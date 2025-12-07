@@ -2,6 +2,56 @@ import library as lib
 import re
 
 
+def day_7_part_one(t="") -> int:
+    grid = lib.load_grid(t)
+    # print(f"Input grid has {max(pt.vt for pt in grid)} rows", end="")
+    # print(f" and {len([*filter(lambda v: v == '^', grid.values())])} splitters")
+    beam_cols = {[*filter(lambda k: grid[k] == 'S', grid.keys())][0].hz}
+    splits = 0
+    for row_id in range(max(pt.vt for pt in grid) + 1):
+        row = {
+            pt: v for pt, v in
+            filter(lambda i: i[0].vt == row_id, grid.items())
+        }
+        split_cols = [
+            loc.hz for loc in row
+            if loc.hz in beam_cols and grid[loc] == "^"
+        ]
+        if split_cols:
+            splits += len(split_cols)
+            uninterrupted_beams = {
+                *filter(lambda bc: bc not in split_cols, beam_cols)
+            }
+            beam_cols = {
+                split_col + deflection
+                for split_col in split_cols
+                for deflection in (-1, 1)
+            }
+            beam_cols.update(uninterrupted_beams)
+    return splits
+
+
+def day_7_part_two(t: str = ""):
+    grid = lib.load_grid(t)
+    ways_to_get_there = {rr: grid[lib.Point(0, rr)] == "S"
+                         for rr in range(max(grid)[1] + 1)}
+    for row_id in range(max(pt.vt for pt in grid) + 1):
+        row = {
+            pt: v for pt, v in
+            filter(lambda i: i[0].vt == row_id, grid.items())
+        }
+        split_cols = [
+            loc.hz for loc in row
+            if ways_to_get_there[loc.hz] and grid[loc] == "^"
+        ]
+        for sc in split_cols:
+            w = ways_to_get_there[sc]
+            ways_to_get_there[sc - 1] += w
+            ways_to_get_there[sc + 1] += w
+            ways_to_get_there[sc] = 0
+    return sum(ways_to_get_there.values())
+
+
 def day_6_part_one(t="") -> int:
     text = lib.load(t)
     rows = text.split("\n")
