@@ -2,6 +2,60 @@ import aoc_2025 as a
 import library as lib
 
 
+class TestDay12:
+    def test(self):
+        lib.verify_2025(a)
+
+
+class TestDay11:
+    def test(self):
+        lib.verify_2025(a)
+
+
+class TestDay10:
+    def test(self):
+        lib.verify_2025(a)
+
+
+class TestDay9:
+    def test(self):
+        lib.verify_2025(a)
+
+
+class TestDay8:
+    def test(self):
+        lib.verify_2025(a)
+
+
+class TestDay7:
+    def test(self):
+        lib.verify_2025(a)
+
+
+class TestDay6:
+    def test_p2(self):
+        eg = """123 328  51 64 
+ 45 64  387 23 
+  6 98  215 314
+*   +   *   +  """
+        assert a.day_6_part_two(eg) == 3263827
+        assert a.day_6_part_two() > 10121317
+
+    def test(self):
+        lib.verify_2025(a)
+
+
+class TestDay5:
+    def test(self):
+        lib.verify_2025(a, 681, 348820208020395)
+    #
+    # def test_part_one(self):
+    #     lib.verify_solution(a.day_5_part_one(), 681)
+    #
+    # def test_part_two(self):
+    #     lib.verify_solution(a.day_5_part_two(), 348820208020395, part_two=True)
+
+
 class TestDay4:
     eg = """..@@.@@@@.
 @@@.@.@.@@

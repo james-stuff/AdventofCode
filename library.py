@@ -6,6 +6,7 @@ import os
 
 
 memo_pad = {}
+Point = namedtuple("Point", "vt hz")
 
 
 def load(text: str = "") -> str:
@@ -48,6 +49,31 @@ def clear_memos(day: str):
                 memo_pad[memo] = var_type()
 
 
+def neighbours(location: Point, diagonals: bool = False) -> [Point,]:
+    y = []
+    if diagonals:
+        y = [
+            move(move(location, d1), d2)
+            for p in product("UD", "LR")
+            for d1, d2 in [p]
+        ]
+    y += [move(location, d) for d in "UDLR"]
+    return y
+
+
+def move(origin: Point, direction: str, n_steps: int = 1) -> Point:
+    arrow_translations = {">": "R", "<": "L", "^": "U", "v": "D"}
+    if direction in arrow_translations:
+        direction = arrow_translations[direction]
+    moves = {
+        "R": lambda p: Point(p.vt, p.hz + n_steps),
+        "L": lambda p: Point(p.vt, p.hz - n_steps),
+        "U": lambda p: Point(p.vt - n_steps, p.hz),
+        "D": lambda p: Point(p.vt + n_steps, p.hz),
+    }
+    return moves[direction](origin)
+
+
 def load_grid(raw_text: str, exclude_chars: str = "#") -> dict:
     raw_text = load(raw_text)
     return {
@@ -62,7 +88,6 @@ def manhattan_distance(point_1: (int,), point_2: (int,)) -> int:
     return sum([abs(d_2 - d_1) for d_1, d_2 in zip(point_1, point_2)])
 
 
-Point = namedtuple("Point", "x y")
 point_moves = {
     "U": lambda p: Point(p.x, p.y + 1),
     "D": lambda p: Point(p.x, p.y - 1),
@@ -98,4 +123,17 @@ def verify_solution(proposed: int, correct: int = None,  part_two: bool = False)
         assert proposed == correct
 
 
-
+def verify_2025(module, sol_pt_1: int = 0, sol_pt_2: int = 0):
+    caller = inspect.currentframe()
+    while not re.search(r"tests_\d{4}.py$", caller.f_code.co_filename):
+        caller = caller.f_back
+    test_class = re.search(
+        r"TestDay\d+\.", caller.f_code.co_qualname
+    ).group()[:-1]
+    day = int(re.search(r"\d+", test_class).group())
+    print(f"\nDay {day}:")
+    for part in ("one", "two"):
+        func = f"day_{day}_part_{part}"
+        if func in module.__dict__:
+            print(f"Part {part.title()} solution is "
+                  f"{module.__dict__[func]()}")
