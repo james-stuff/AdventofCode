@@ -2,6 +2,116 @@ import library as lib
 import re
 
 
+def day_9_part_two(t="") -> int:
+    reds = day_9_load_red_tiles(t)
+    pairings = sorted(
+        [
+            (tile, other_tile)
+            for ti, tile in enumerate(reds)
+            for other_tile in reds[ti + 1:]
+        ],
+        key=lambda pair: day_9_area(*pair),
+        reverse=True
+    )
+
+    def all_edges_are_within(edges: [int]) -> bool:
+        return (any(r.vt <= edges[0] and r.hz <= edges[2] for r in reds) and
+                any(r.vt <= edges[0] and r.hz >= edges[3] for r in reds) and
+                any(r.vt >= edges[1] and r.hz <= edges[2] for r in reds) and
+                any(r.vt >= edges[1] and r.hz >= edges[3] for r in reds))
+
+    for pr in pairings:
+        box_edges = [f(p[i] for p in pr) for i in range(2) for f in (min, max)]
+        if not any(box_edges[0] < pt.vt < box_edges[1] and
+                   box_edges[2] < pt.hz < box_edges[3]
+                   for pt in reds) and all_edges_are_within(box_edges):
+            print(f"{pr=}")
+            return day_9_area(*pr)
+    return 0
+
+
+def day_9_part_one(t="") -> int:
+    red_tiles = day_9_load_red_tiles()
+    print(f"{len(red_tiles)=}")
+    return max(
+        day_9_area(tile, other_tile)
+        for ti, tile in enumerate(red_tiles)
+        for other_tile in red_tiles[ti + 1:]
+    )
+
+
+def day_9_area(tile: (lib.Point,), other_tile: (lib.Point,)) -> int:
+    return ((abs(other_tile[0] - tile[0]) + 1) *
+            (abs(other_tile[1] - tile[1]) + 1))
+
+
+def day_9_load_red_tiles(t="") -> [lib.Point]:
+    text = lib.load(t)
+    return [
+        lib.Point(*map(int, (v, h)))
+        for row in text.split("\n")
+        for h, v in [row.split(",")]
+    ]
+
+
+def day_8_part_one(t="") -> int:
+    max_conn = 10 if t else 1000
+    largest_1, largest_2, largest_3 = sorted(
+        (len(cir) for cir in day_8_traverse(
+            t, max_connections=max_conn
+        )), reverse=True
+    )[:3]
+    return largest_1 * largest_2 * largest_3
+
+
+def day_8_part_two(t="") -> int:
+    b1, b2 = day_8_traverse(t)
+    print(f"{b1=}, {b2=}")
+    return b1[0] * b2[0]
+
+
+def day_8_traverse(t: str = "", max_connections: int = 0) -> [{}]:
+    t = lib.load(t)
+    boxes = [tuple(map(int, tuple(nums.split(",")))) for nums in t.split("\n")]
+    print(f"{len(boxes)=}")
+    box_pairs = sorted([
+        (b, bb)
+        for i, b in enumerate(boxes)
+        for bb in boxes[i + 1:]
+        if b != bb
+    ], key=lambda pair: day_8_euclidean_distance(*pair), reverse=True)
+    circuits = []
+    connections = 0
+    ultimate, penultimate = None, None
+    unfinished_condition = (lambda nc: nc < max_connections) \
+        if max_connections else (lambda nc: len(circuits) == 0 or len(circuits[0]) < len(boxes))
+    while unfinished_condition(connections):
+        bp = box_pairs.pop()
+        touched_circuits = [
+            *filter(lambda c: any(bx in c for bx in bp), circuits)
+        ]
+        if len(touched_circuits) == 2:
+            circuits = [
+                *filter(lambda cr: cr not in touched_circuits, circuits)
+            ] + [touched_circuits[0].union(touched_circuits[1])]
+        elif len(touched_circuits) == 1:
+            # if all(bbx in existing_circuits[0] for bbx in bp):
+            #     continue
+            circuits = [
+                *filter(lambda cr: cr not in touched_circuits, circuits)
+            ] + [touched_circuits[0].union({*bp})]
+        else:
+            circuits.append({*bp})
+        connections += 1
+        ultimate, penultimate = bp#[1], ultimate
+    print(f"{len(circuits[0])=}, {connections=}")
+    return circuits if max_connections else (ultimate, penultimate)
+
+
+def day_8_euclidean_distance(pt1: (int,), pt2: (int,)):
+    return sum((x1 - x2) ** 2 for x1, x2 in zip(pt1, pt2)) ** 0.5
+
+
 def day_7_part_one(t="") -> int:
     grid = lib.load_grid(t)
     # print(f"Input grid has {max(pt.vt for pt in grid)} rows", end="")
